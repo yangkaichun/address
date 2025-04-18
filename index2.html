@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>台灣地址經緯度產生器 (Nominatim API)</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; }
+        #resultsContainer { margin-top: 20px; }
+        #results { border-collapse: collapse; width: 80%; }
+        #results th, #results td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        #results th { background-color: #f2f2f2; }
+        #downloadButton { margin-top: 10px; padding: 8px 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>台灣地址經緯度產生器 (Nominatim API)</h1>
+
+    <label for="excelFile">選擇 Excel (請先另存為 CSV 檔案，第一欄為地址):</label>
+    <input type="file" id="excelFile" accept=".csv">
+    <br><br>
+    <button onclick="generateCoordinates()">產生經緯度</button>
+
+    <div id="resultsContainer">
+        <h2>查詢結果</h2>
+        <table id="results">
+            <thead>
+                <tr>
+                    <th>中文地址 (處理後)</th>
+                    <th>經緯度</th>
+                </tr>
+            </thead>
+            <tbody id="resultsBody">
+            </tbody>
+        </table>
+        <button id="downloadButton" onclick="downloadExcel()">下載 Excel</button>
+    </div>
+
+    <script>
+        const chineseToArabic = {
+            '零': '0', '一': '1', '二': '2', '三': '3', '四': '4',
+            '五': '5', '六': '6', '七': '7', '八': '8', '九': '9',
+            '十': '10', '百': '100', '千': '1000'
+        };
+
+        function convertChineseNumerals(address) {
+            let arabicAddress = address;
+            for (const chinese in chineseToArabic) {
+                arabicAddress = arabicAddress.replace(new RegExp(chinese, 'g'), chineseToArabic[chinese]);
+            }
+
+            // 進一步處理 "十", "百", "千" 的組合 (簡化處理，可能不適用於所有複雜情況)
+            arabicAddress = arabicAddress.replace(/([0-9])十([0-9])/g, (match, p1, p2) => parseInt(p1) * 10 + parseInt(p2));
+            arabicAddress = arabicAddress.replace(/([0-9])十/g, (match, p1) => parseInt(p1) * 10);
+            arabicAddress = arabicAddress.replace(/十([0-9])/g, (match, p1) => 10 + parseInt(p1));
+            arabicAddress = arabicAddress.replace(/十/g, '10'); // 單獨的 "十"
+
+            return arabicAddress;
+        }
+
+        function truncateToHao(address) {
+            const haoIndex = address.lastIndexOf('號');
+            if (haoIndex !== -1) {
+                return address.substring(0, haoIndex + 1).trim();
+            }
+            return address.trim();
+        }
+
+        let processedAddresses = [];
+        let coordinatesData = [];
+
+        function generateCoordinates() {
+            const fileInput = document.getElementById('excelFile');
+            const resultsBody = document.getElementById('resultsBody');
+            resultsBody.innerHTML = ''; // 清空之前的結果
+            processedAddresses = [];
+            coordinatesData = [];
+
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('請先選擇一個 CSV 檔案。');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const contents = e.target.result;
+                const lines = contents.split('\n');
+                const addresses = [];
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line) {
+                        const columns = line.split(',');
+                        if (columns.length > 0 && columns[0].trim()) {
+                            addresses.push(columns[0].trim());
+                        }
+                    }
+                }
+                processAddresses(addresses);
+            };
+            reader.onerror = function(e) {
+                alert('讀取檔案時發生錯誤：' + e.target.error);
+            };
+            reader.readAsText(file, 'utf-8');
+        }
+
+        function processAddresses(addresses) {
+            const resultsBody = document.getElementById('resultsBody');
+            const baseUrl = "https://nominatim.openstreetmap.org/search";
+            const format = "jsonv2";
+            const language = "zh-TW";
+
+            const fetchPromises = [];
+
+            addresses.forEach(address => {
+                const convertedAddress = convertChineseNumerals(address);
+                const truncatedAddress = truncateToHao(convertedAddress);
+                processedAddresses.push(truncatedAddress);
+
+                const params = new URLSearchParams({
+                    'q': truncatedAddress + ', 台灣', // 加上 ", 台灣" 提高準確性
+                    'format': format,
+                    'accept-language': language
+                });
+                const apiUrl = `${baseUrl}?${params.toString()}`;
+
+                const promise = fetch(apiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        let latlng = "找不到經緯度";
+                        if (data && data.length > 0) {
+                            latlng = `${data[0].lat}, ${data[0].lon}`;
+                        }
+                        coordinatesData.push(latlng);
+                        const row = resultsBody.insertRow();
+                        const addressCell = row.insertCell();
+                        const latlngCell = row.insertCell();
+                        addressCell.textContent = truncatedAddress;
+                        latlngCell.textContent = latlng;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching coordinates:', error);
+                        coordinatesData.push("API 請求錯誤");
+                        const row = resultsBody.insertRow();
+                        const addressCell = row.insertCell();
+                        const latlngCell = row.insertCell();
+                        addressCell.textContent = truncatedAddress;
+                        latlngCell.textContent = "API 請求錯誤";
+                    });
+                fetchPromises.push(promise);
+            });
+
+            Promise.all(fetchPromises).then(() => {
+                document.getElementById('downloadButton').style.display = 'block';
+            });
+        }
+
+        function downloadExcel() {
+            if (processedAddresses.length === 0) {
+                alert("請先產生經緯度資料。");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "中文地址,經緯度\n"; // Add header
+
+            for (let i = 0; i < processedAddresses.length; i++) {
+                csvContent += `${processedAddresses[i]},${coordinatesData[i]}\n`;
+            }
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "經緯度資料.csv");
+            document.body.appendChild(link); // Required for FF
+
+            link.click();
+
+            document.body.removeChild(link); // Clean up
+        }
+
+        // 隱藏下載按鈕
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('downloadButton').style.display = 'none';
+        });
+    </script>
+
+</body>
+</html>
