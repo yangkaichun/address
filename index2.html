@@ -27,6 +27,7 @@
                 <tr>
                     <th>中文地址 (處理後)</th>
                     <th>經緯度</th>
+                    <th>地圖</th>
                 </tr>
             </thead>
             <tbody id="resultsBody">
@@ -139,8 +140,14 @@
                         const row = resultsBody.insertRow();
                         const addressCell = row.insertCell();
                         const latlngCell = row.insertCell();
+                        const mapCell = row.insertCell();
                         addressCell.textContent = truncatedAddress;
                         latlngCell.textContent = latlng;
+                        const mapLink = document.createElement('a');
+                        mapLink.textContent = '地圖';
+                        mapLink.href = `https://maps.google.com//${encodeURIComponent(truncatedAddress)}`;
+                        mapLink.target = '_blank'; // 在新分頁中開啟
+                        mapCell.appendChild(mapLink);
                     })
                     .catch(error => {
                         console.error('Error fetching coordinates:', error);
@@ -148,8 +155,10 @@
                         const row = resultsBody.insertRow();
                         const addressCell = row.insertCell();
                         const latlngCell = row.insertCell();
+                        const mapCell = row.insertCell();
                         addressCell.textContent = truncatedAddress;
                         latlngCell.textContent = "API 請求錯誤";
+                        mapCell.textContent = ""; // No map link for error
                     });
                 fetchPromises.push(promise);
             });
