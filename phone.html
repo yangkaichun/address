@@ -8,15 +8,21 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <style>
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
         table {
-            width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            width: 100%;
         }
         th, td {
             border: 1px solid #ddd;
@@ -26,69 +32,47 @@
         th {
             background-color: #f2f2f2;
         }
-        .btn {
-            display: inline-block;
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 10px;
-            margin-bottom: 10px;
-        }
-        .btn:hover {
-            background-color: #45a049;
-        }
-        .btn:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        #loading {
-            display: none;
-            margin-top: 10px;
-        }
-        #processBtn {
-            margin-top: 10px;
-        }
-        #downloadBtn {
-            display: none;
-        }
-        .location-status {
-            margin-bottom: 10px;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        .location-success {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .location-error {
-            background-color: #f8d7da;
-            color: #721c24;
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1 class="text-3xl font-bold mb-6">地址經緯度轉換工具</h1>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="max-w-6xl mx-auto bg-white rounded-lg shadow p-6">
+        <h1 class="text-2xl font-bold text-center mb-6">地址經緯度轉換工具</h1>
         
-        <div id="locationStatus" class="location-status"></div>
-        
-        <div class="mb-4">
-            <input type="file" id="fileInput" accept=".xlsx, .xls" class="mb-2" />
-            <button id="uploadBtn" class="btn">選擇Excel檔案</button>
+        <div id="location-info" class="mb-4 text-center text-sm text-gray-600">
+            正在獲取您的位置...
         </div>
         
-        <div id="fileInfo" class="mb-4"></div>
+        <div class="flex flex-col md:flex-row justify-center items-center gap-4 mb-6">
+            <div class="flex items-center">
+                <label for="fileInput" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded cursor-pointer">
+                    選擇Excel檔案
+                </label>
+                <input type="file" id="fileInput" accept=".xlsx, .xls" class="hidden" />
+                <span id="fileName" class="ml-2 text-gray-600">未選擇檔案</span>
+            </div>
+            
+            <button id="processButton" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" disabled>
+                產生經緯度
+            </button>
+            
+            <button id="downloadButton" class="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded" disabled>
+                下載結果
+            </button>
+        </div>
         
-        <button id="processBtn" class="btn" disabled>產生經緯度</button>
-        <button id="downloadBtn" class="btn">下載結果</button>
+        <div id="progress" class="hidden mb-4">
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+            <p id="progressText" class="text-center mt-2 text-sm text-gray-600">處理中: 0%</p>
+        </div>
         
-        <div id="loading">處理中，請稍候...</div>
-        
-        <div id="results" class="mt-6">
-            <table id="resultsTable">
+        <div id="resultContainer" class="hidden mt-6 overflow-x-auto">
+            <h2 class="text-xl font-semibold mb-3">處理結果</h2>
+            <table id="resultTable" class="w-full border">
                 <thead>
                     <tr>
                         <th>原始地址</th>
@@ -100,79 +84,48 @@
                         <th>距離(公尺)</th>
                     </tr>
                 </thead>
-                <tbody></tbody>
+                <tbody id="resultBody"></tbody>
             </table>
         </div>
     </div>
 
     <script>
-        let userExcelFile = null;
-        let addressData = [];
-        let processedData = [];
+        // 全局變量
         let userLocation = null;
+        let excelData = null;
+        let processedData = [];
+        const API_KEY = '874dd31a406847e6b108ba60cdc5b566'; // OpenCage API Key
         
-        // 頁面載入時獲取用戶位置
+        // 初始化：獲取用戶位置
         document.addEventListener('DOMContentLoaded', function() {
-            getUserLocation();
-            
-            document.getElementById('uploadBtn').addEventListener('click', function() {
-                document.getElementById('fileInput').click();
-            });
-            
-            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
-            document.getElementById('processBtn').addEventListener('click', processAddresses);
-            document.getElementById('downloadBtn').addEventListener('click', downloadResults);
-        });
-        
-        // 獲取用戶當前位置
-        function getUserLocation() {
-            const locationStatus = document.getElementById('locationStatus');
-            
             if (navigator.geolocation) {
-                locationStatus.textContent = "正在獲取您的位置...";
-                
                 navigator.geolocation.getCurrentPosition(
                     function(position) {
                         userLocation = {
-                            latitude: position.coords.latitude,
-                            longitude: position.coords.longitude
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
                         };
-                        
-                        locationStatus.textContent = `已獲取您的位置：緯度 ${userLocation.latitude.toFixed(6)}，經度 ${userLocation.longitude.toFixed(6)}`;
-                        locationStatus.className = "location-status location-success";
+                        document.getElementById('location-info').innerHTML = 
+                            `您的當前位置: 緯度 ${userLocation.lat.toFixed(6)}, 經度 ${userLocation.lng.toFixed(6)}`;
                     },
                     function(error) {
-                        let errorMessage = "";
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMessage = "用戶拒絕了地理位置請求。";
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMessage = "位置信息不可用。";
-                                break;
-                            case error.TIMEOUT:
-                                errorMessage = "獲取用戶位置超時。";
-                                break;
-                            case error.UNKNOWN_ERROR:
-                                errorMessage = "發生未知錯誤。";
-                                break;
-                        }
-                        locationStatus.textContent = `無法獲取您的位置：${errorMessage}`;
-                        locationStatus.className = "location-status location-error";
+                        document.getElementById('location-info').innerHTML = 
+                            `無法獲取您的位置: ${error.message}`;
                     }
                 );
             } else {
-                locationStatus.textContent = "您的瀏覽器不支持地理位置功能。";
-                locationStatus.className = "location-status location-error";
+                document.getElementById('location-info').innerHTML = 
+                    '您的瀏覽器不支持地理位置功能';
             }
-        }
+        });
         
-        // 處理檔案上傳
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
+        // 文件上傳處理
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
             if (!file) return;
             
-            userExcelFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('processButton').disabled = false;
             
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -181,257 +134,305 @@
                     const workbook = XLSX.read(data, { type: 'array' });
                     const firstSheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[firstSheetName];
-                    
-                    // 讀取第一欄的所有地址
-                    addressData = [];
-                    let range = XLSX.utils.decode_range(worksheet['!ref']);
-                    
-                    for (let rowNum = range.s.r + 1; rowNum <= range.e.r; rowNum++) {
-                        let cellAddress = XLSX.utils.encode_cell({ r: rowNum, c: 0 });
-                        let cell = worksheet[cellAddress];
-                        
-                        if (cell && cell.v) {
-                            addressData.push(cell.v.toString());
-                        }
-                    }
-                    
-                    document.getElementById('fileInfo').textContent = `已上傳檔案：${file.name}，共 ${addressData.length} 筆地址`;
-                    document.getElementById('processBtn').disabled = false;
-                    
+                    excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    console.log('已讀取Excel檔案', excelData.length, '行');
                 } catch (error) {
-                    console.error('解析Excel檔案時發生錯誤:', error);
-                    document.getElementById('fileInfo').textContent = '無法解析Excel檔案，請確保格式正確';
+                    console.error('Excel檔案讀取錯誤:', error);
+                    alert('Excel檔案讀取錯誤: ' + error.message);
                 }
             };
-            
             reader.readAsArrayBuffer(file);
-        }
+        });
         
-        // 處理地址
-        async function processAddresses() {
-            if (addressData.length === 0) return;
+        // 處理按鈕點擊事件
+        document.getElementById('processButton').addEventListener('click', async function() {
+            if (!excelData || excelData.length <= 1) {
+                alert('請上傳有效的Excel檔案');
+                return;
+            }
             
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('processBtn').disabled = true;
-            
+            // 重置處理數據
             processedData = [];
-            const tbody = document.querySelector('#resultsTable tbody');
-            tbody.innerHTML = '';
+            document.getElementById('processButton').disabled = true;
+            document.getElementById('downloadButton').disabled = true;
+            document.getElementById('resultBody').innerHTML = '';
             
-            for (let i = 0; i < addressData.length; i++) {
-                const originalAddress = addressData[i];
-                const processedAddress = processAddress(originalAddress);
+            // 顯示進度條
+            document.getElementById('progress').classList.remove('hidden');
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressText').textContent = '處理中: 0%';
+            
+            // 獲取地址數據（跳過標題行）
+            const addresses = excelData.slice(1).map(row => row[0]).filter(address => address);
+            
+            try {
+                await processAddresses(addresses);
                 
+                // 顯示結果
+                document.getElementById('resultContainer').classList.remove('hidden');
+                document.getElementById('downloadButton').disabled = false;
+            } catch (error) {
+                console.error('處理錯誤:', error);
+                alert('處理過程中發生錯誤: ' + error.message);
+            } finally {
+                document.getElementById('processButton').disabled = false;
+            }
+        });
+        
+        // 下載按鈕點擊事件
+        document.getElementById('downloadButton').addEventListener('click', function() {
+            if (processedData.length === 0) {
+                alert('沒有可下載的數據');
+                return;
+            }
+            
+            try {
+                // 創建工作表
+                const ws = XLSX.utils.json_to_sheet(processedData.map(item => ({
+                    '原始地址': item.originalAddress,
+                    '處理後地址': item.processedAddress,
+                    '經度': item.longitude,
+                    '緯度': item.latitude,
+                    '地圖連結': item.mapUrl,
+                    'Google座標': item.googleCoords,
+                    '距離(公尺)': item.distance
+                })));
+                
+                // 創建工作簿
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, '地址經緯度');
+                
+                // 下載
+                XLSX.writeFile(wb, '地址經緯度結果.xlsx');
+            } catch (error) {
+                console.error('下載錯誤:', error);
+                alert('生成Excel檔案時發生錯誤: ' + error.message);
+            }
+        });
+        
+        // 處理地址列表
+        async function processAddresses(addresses) {
+            let count = 0;
+            
+            for (const originalAddress of addresses) {
                 try {
-                    // 使用 OpenCage API 查詢經緯度
-                    const geocodeResult = await geocodeAddress(processedAddress);
+                    // 處理地址
+                    const processedAddress = processAddress(originalAddress);
                     
-                    // 創建 Google 地圖連結
-                    const googleMapLink = `https://www.google.com/maps/place/${encodeURIComponent(originalAddress)}`;
+                    // 獲取經緯度
+                    const coords = await getCoordinates(processedAddress);
                     
-                    // 獲取 Google 重定向 URL 中的座標
-                    const redirectCoords = await getGoogleRedirectCoords(googleMapLink);
+                    // 創建Google地圖連結
+                    const mapUrl = `https://www.google.com/maps/place/${encodeURIComponent(originalAddress)}`;
+                    
+                    // 獲取Google的重定向座標
+                    const googleCoords = await getGoogleRedirectCoords(mapUrl);
                     
                     // 計算距離
-                    let distance = '';
-                    if (userLocation && redirectCoords) {
-                        const coords = redirectCoords.split(',');
-                        if (coords.length === 2) {
-                            distance = calculateDistance(
-                                userLocation.latitude, 
-                                userLocation.longitude,
-                                parseFloat(coords[0]), 
-                                parseFloat(coords[1])
-                            ).toFixed(0);
+                    let distance = '無法計算';
+                    if (userLocation && googleCoords) {
+                        const coordParts = googleCoords.split(',');
+                        if (coordParts.length >= 2) {
+                            const lat = parseFloat(coordParts[0]);
+                            const lng = parseFloat(coordParts[1]);
+                            distance = Math.round(calculateDistance(userLocation.lat, userLocation.lng, lat, lng));
                         }
                     }
                     
-                    // 保存數據
-                    const rowData = {
-                        originalAddress: originalAddress,
-                        processedAddress: processedAddress,
-                        longitude: geocodeResult.longitude,
-                        latitude: geocodeResult.latitude,
-                        mapLink: googleMapLink,
-                        googleCoords: redirectCoords || '',
-                        distance: distance
+                    // 保存結果
+                    const resultItem = {
+                        originalAddress,
+                        processedAddress,
+                        latitude: coords ? coords.lat : '未找到',
+                        longitude: coords ? coords.lng : '未找到',
+                        mapUrl,
+                        googleCoords: googleCoords || '未找到',
+                        distance: typeof distance === 'number' ? distance : distance
                     };
                     
-                    processedData.push(rowData);
-                    
-                    // 更新表格
-                    const row = tbody.insertRow();
-                    row.insertCell(0).textContent = rowData.originalAddress;
-                    row.insertCell(1).textContent = rowData.processedAddress;
-                    row.insertCell(2).textContent = rowData.longitude;
-                    row.insertCell(3).textContent = rowData.latitude;
-                    
-                    const mapCell = row.insertCell(4);
-                    const mapLink = document.createElement('a');
-                    mapLink.href = rowData.mapLink;
-                    mapLink.target = '_blank';
-                    mapLink.textContent = '地圖';
-                    mapCell.appendChild(mapLink);
-                    
-                    row.insertCell(5).textContent = rowData.googleCoords;
-                    row.insertCell(6).textContent = rowData.distance;
-                    
+                    processedData.push(resultItem);
+                    addResultRow(resultItem);
                 } catch (error) {
                     console.error(`處理地址 "${originalAddress}" 時發生錯誤:`, error);
                     
-                    // 即使發生錯誤，也添加行
-                    const row = tbody.insertRow();
-                    row.insertCell(0).textContent = originalAddress;
-                    row.insertCell(1).textContent = processedAddress;
-                    row.insertCell(2).textContent = '處理失敗';
-                    row.insertCell(3).textContent = '處理失敗';
-                    row.insertCell(4).textContent = '處理失敗';
-                    row.insertCell(5).textContent = '處理失敗';
-                    row.insertCell(6).textContent = '處理失敗';
+                    // 添加錯誤結果
+                    const resultItem = {
+                        originalAddress,
+                        processedAddress: processAddress(originalAddress),
+                        latitude: '錯誤',
+                        longitude: '錯誤',
+                        mapUrl: `https://www.google.com/maps/place/${encodeURIComponent(originalAddress)}`,
+                        googleCoords: '錯誤',
+                        distance: '錯誤'
+                    };
+                    
+                    processedData.push(resultItem);
+                    addResultRow(resultItem);
+                }
+                
+                // 更新進度
+                count++;
+                const progress = Math.round((count / addresses.length) * 100);
+                document.getElementById('progressBar').style.width = `${progress}%`;
+                document.getElementById('progressText').textContent = `處理中: ${progress}%`;
+                
+                // 延遲以避免API請求過快
+                if (count < addresses.length) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
-            
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('processBtn').disabled = false;
-            document.getElementById('downloadBtn').style.display = 'inline-block';
         }
         
-        // 處理地址：將中文數字轉為阿拉伯數字，只保留到「號」
+        // 將中文數字轉換為阿拉伯數字，並只保留到「號」
         function processAddress(address) {
-            // 先將中文數字轉為阿拉伯數字
-            const chineseNums = {
+            if (!address) return '';
+            
+            // 中文數字對照表
+            const chineseNumbers = {
                 '零': '0', '一': '1', '二': '2', '三': '3', '四': '4',
                 '五': '5', '六': '6', '七': '7', '八': '8', '九': '9',
-                '十': '10', '百': '00', '千': '000', '萬': '0000',
                 '壹': '1', '貳': '2', '參': '3', '肆': '4', '伍': '5',
-                '陸': '6', '柒': '7', '捌': '8', '玖': '9'
+                '陸': '6', '柒': '7', '捌': '8', '玖': '9', '拾': '10',
+                '十': '10', '百': '100', '佰': '100', '千': '1000', '仟': '1000',
+                '萬': '10000', '億': '100000000'
             };
             
-            // 處理特殊的數字組合
-            let processed = address;
-            
-            // 處理十X的情況
-            processed = processed.replace(/十([一二三四五六七八九])/g, (match, p1) => '1' + chineseNums[p1]);
-            processed = processed.replace(/([一二三四五六七八九])十([一二三四五六七八九])/g, (match, p1, p2) => chineseNums[p1] + chineseNums[p2]);
-            processed = processed.replace(/([一二三四五六七八九])十/g, (match, p1) => chineseNums[p1] + '0');
-            
-            // 處理百位數
-            processed = processed.replace(/([一二三四五六七八九])百([一二三四五六七八九])十([一二三四五六七八九])/g, (match, p1, p2, p3) => chineseNums[p1] + chineseNums[p2] + chineseNums[p3]);
-            processed = processed.replace(/([一二三四五六七八九])百([一二三四五六七八九])/g, (match, p1, p2) => chineseNums[p1] + '0' + chineseNums[p2]);
-            processed = processed.replace(/([一二三四五六七八九])百/g, (match, p1) => chineseNums[p1] + '00');
-            
-            // 替換剩餘的單個中文數字
-            for (const [chinese, arabic] of Object.entries(chineseNums)) {
-                processed = processed.replace(new RegExp(chinese, 'g'), arabic);
+            // 轉換函數
+            function convertChineseNumber(text) {
+                let result = '';
+                let tempNum = 0;
+                let tempDigit = 1;
+                let isNumber = false;
+                
+                for (let i = 0; i < text.length; i++) {
+                    const char = text[i];
+                    if (chineseNumbers[char] !== undefined) {
+                        isNumber = true;
+                        const num = parseInt(chineseNumbers[char]);
+                        if (num >= 10) {
+                            if (tempNum === 0) tempNum = 1;
+                            if (num === 10) {
+                                tempNum *= 10;
+                            } else {
+                                tempNum *= num;
+                            }
+                            result += tempNum.toString();
+                            tempNum = 0;
+                            tempDigit = 1;
+                        } else {
+                            if (i + 1 < text.length && parseInt(chineseNumbers[text[i + 1]] || 0) >= 10) {
+                                tempNum += num;
+                            } else {
+                                tempNum += num * tempDigit;
+                                tempDigit *= 10;
+                            }
+                        }
+                    } else {
+                        if (isNumber) {
+                            if (tempNum > 0) {
+                                result += tempNum.toString();
+                            }
+                            tempNum = 0;
+                            tempDigit = 1;
+                            isNumber = false;
+                        }
+                        result += char;
+                    }
+                }
+                
+                if (tempNum > 0) {
+                    result += tempNum.toString();
+                }
+                
+                return result;
             }
             
-            // 找到「號」或「巷」的位置，只保留到此為止
-            const houIndex = processed.indexOf('號');
-            if (houIndex !== -1) {
-                processed = processed.substring(0, houIndex + 1);
+            // 轉換中文數字
+            let processedAddr = convertChineseNumber(address);
+            
+            // 截取到「號」
+            const index = processedAddr.indexOf('號');
+            if (index !== -1) {
+                processedAddr = processedAddr.substring(0, index + 1);
             }
             
-            return processed;
+            return processedAddr;
         }
         
-        // 使用 OpenCage Geocoding API 進行地理編碼
-        async function geocodeAddress(address) {
-            const apiKey = '874dd31a406847e6b108ba60cdc5b566';
-            const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(address)}&key=${apiKey}&language=zh-Hant&limit=1`;
-            
+        // 從OpenCage API獲取經緯度
+        async function getCoordinates(address) {
             try {
+                const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(address)}&key=${API_KEY}&language=zh-TW&limit=1`;
                 const response = await fetch(url);
                 const data = await response.json();
                 
                 if (data.results && data.results.length > 0) {
-                    const result = data.results[0];
                     return {
-                        latitude: result.geometry.lat,
-                        longitude: result.geometry.lng
+                        lat: data.results[0].geometry.lat,
+                        lng: data.results[0].geometry.lng
                     };
-                } else {
-                    throw new Error('無法找到地址的經緯度');
                 }
+                return null;
             } catch (error) {
-                console.error('地理編碼請求失敗:', error);
-                throw error;
+                console.error('獲取座標錯誤:', error);
+                return null;
             }
         }
         
-        // 獲取 Google 地圖重定向 URL 中的座標
+        // 獲取Google地圖重定向後的座標
         async function getGoogleRedirectCoords(url) {
             try {
-                // 由於CORS限制，我們不能直接獲取重定向URL，這裡模擬返回座標
-                // 在實際環境中，這應該通過服務器端API進行處理
-                // 這裡使用OpenCage返回的座標模擬
-                const mockResponsePromise = new Promise((resolve) => {
-                    setTimeout(() => {
-                        // 提取URL中的地址部分
-                        const addressPart = decodeURIComponent(url.split('/place/')[1] || '');
-                        // 假設我們已經有了該地址的座標數據
-                        resolve(`@25.${Math.random().toString().substring(2, 8)},121.${Math.random().toString().substring(2, 8)},15z/`);
-                    }, 200);
-                });
+                // 模擬訪問Google地圖URL並獲取重定向URL
+                const response = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+                const redirectUrl = response.url;
                 
-                const mockRedirectUrl = await mockResponsePromise;
-                
-                // 提取 @ 符號後面到下一個斜線之間的數字
-                const match = mockRedirectUrl.match(/@([^\/]+)/);
+                // 提取@後面到斜線之間的座標
+                const match = redirectUrl.match(/@([^\/]+)/);
                 if (match && match[1]) {
-                    // 去除英文字符，只保留數字和逗號
-                    const coords = match[1].replace(/[a-zA-Z]/g, '');
-                    return coords;
+                    // 只保留數字、逗號和小數點
+                    return match[1].replace(/[^0-9,\.]/g, '');
                 }
                 return null;
             } catch (error) {
-                console.error('獲取Google重定向URL失敗:', error);
+                console.error('獲取Google重定向座標錯誤:', error);
                 return null;
             }
         }
         
-        // 計算兩點之間的距離 (使用 Haversine 公式)
+        // 計算兩點之間的距離（米）
         function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371000; // 地球半徑（公尺）
-            const dLat = toRad(lat2 - lat1);
-            const dLon = toRad(lon2 - lon1);
+            const R = 6371000; // 地球半徑（米）
+            const dLat = deg2rad(lat2 - lat1);
+            const dLon = deg2rad(lon2 - lon1);
             const a = 
                 Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
-                Math.sin(dLon/2) * Math.sin(dLon/2); 
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-            const d = R * c;
-            return d;
+                Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; // 距離（米）
         }
         
-        function toRad(value) {
-            return value * Math.PI / 180;
+        // 角度轉弧度
+        function deg2rad(deg) {
+            return deg * (Math.PI/180);
         }
         
-        // 下載結果
-        function downloadResults() {
-            if (processedData.length === 0) return;
+        // 添加結果行到表格
+        function addResultRow(item) {
+            const tbody = document.getElementById('resultBody');
+            const row = document.createElement('tr');
             
-            // 創建工作表
-            const ws = XLSX.utils.json_to_sheet(processedData.map(item => ({
-                '原始地址': item.originalAddress,
-                '處理後地址': item.processedAddress,
-                '經度': item.longitude,
-                '緯度': item.latitude,
-                '地圖連結': item.mapLink,
-                'Google座標': item.googleCoords,
-                '距離(公尺)': item.distance
-            })));
+            row.innerHTML = `
+                <td>${item.originalAddress}</td>
+                <td>${item.processedAddress}</td>
+                <td>${typeof item.longitude === 'number' ? item.longitude.toFixed(6) : item.longitude}</td>
+                <td>${typeof item.latitude === 'number' ? item.latitude.toFixed(6) : item.latitude}</td>
+                <td><a href="${item.mapUrl}" target="_blank" class="text-blue-500 hover:underline">地圖</a></td>
+                <td>${item.googleCoords}</td>
+                <td>${item.distance}</td>
+            `;
             
-            // 創建工作簿
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, '地址經緯度');
-            
-            // 生成Excel文件並下載
-            const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            
-            // 使用FileSaver保存文件
-            saveAs(blob, '地址經緯度結果.xlsx');
+            tbody.appendChild(row);
         }
     </script>
 </body>
