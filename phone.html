@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>獲取您的位置</title>
+<style>
+body { font-family: sans-serif; text-align: center; }
+#location { margin-top: 20px; font-size: 1.2em; }
+</style>
+</head>
+<body>
+
+<h1>您的位置</h1>
+<div id="location">載入中...</div>
+
+<script>
+function getLocation() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(showPosition, showError);
+  } else {
+    document.getElementById("location").innerHTML = "您的瀏覽器不支援地理位置功能。";
+  }
+}
+
+function showPosition(position) {
+  document.getElementById("location").innerHTML = "緯度: " + position.coords.latitude +
+  "<br>經度: " + position.coords.longitude;
+}
+
+function showError(error) {
+  let message;
+  switch(error.code) {
+    case error.PERMISSION_DENIED:
+      message = "使用者拒絕了地理位置請求。";
+      break;
+    case error.POSITION_UNAVAILABLE:
+      message = "位置資訊不可用。";
+      break;
+    case error.TIMEOUT:
+      message = "請求使用者位置資訊逾時。";
+      break;
+    case error.UNKNOWN_ERROR:
+      message = "發生未知的錯誤。";
+      break;
+  }
+  document.getElementById("location").innerHTML = "錯誤： " + message;
+}
+
+// 網頁載入時呼叫 getLocation 函數
+window.onload = getLocation;
+</script>
+
+</body>
+</html>
