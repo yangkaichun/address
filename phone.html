@@ -2,52 +2,144 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>獲取您的位置</title>
+<title>地址轉地圖與距離計算</title>
 <style>
-body { font-family: sans-serif; text-align: center; }
-#location { margin-top: 20px; font-size: 1.2em; }
+body { font-family: sans-serif; text-align: left; margin: 20px; }
+label { display: block; margin-bottom: 5px; }
+input[type="text"] { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+button { padding: 10px 15px; margin-bottom: 10px; cursor: pointer; }
+#result { margin-top: 20px; font-weight: bold; }
 </style>
 </head>
 <body>
 
-<h1>您的位置</h1>
-<div id="location">載入中...</div>
+<h1>地址轉換與距離計算</h1>
+
+<div>
+    <label for="taiwanAddress">台灣地址 (中文數字將自動轉換為阿拉伯數字):</label>
+    <input type="text" id="taiwanAddress" name="taiwanAddress">
+    <button onclick="generateMapLink()">產生地圖連結</button>
+</div>
+
+<div>
+    <label for="googleCoordinates">Google 座標經緯度:</label>
+    <input type="text" id="googleCoordinates" name="googleCoordinates" readonly>
+</div>
+
+<button onclick="calculateDistance()">計算距離</button>
+
+<div id="result"></div>
 
 <script>
-function getLocation() {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(showPosition, showError);
-  } else {
-    document.getElementById("location").innerHTML = "您的瀏覽器不支援地理位置功能。";
-  }
+const chineseToArabic = {
+    '一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7', '八': '8', '九': '9', '十': '10',
+    '零': '0', '壹': '1', '貳': '2', '參': '3', '肆': '4', '伍': '5', '陸': '6', '柒': '7', '捌': '8', '玖': '9', '拾': '10',
+};
+
+function convertChineseNumerals(address) {
+    return address.replace(/[一二三四五六七八九十零壹貳參肆伍陸柒捌玖拾]/g, function(match) {
+        return chineseToArabic[match] || match;
+    });
 }
 
-function showPosition(position) {
-  document.getElementById("location").innerHTML = "緯度: " + position.coords.latitude +
-  "<br>經度: " + position.coords.longitude;
+function generateMapLink() {
+    const addressInput = document.getElementById("taiwanAddress");
+    const googleCoordinatesInput = document.getElementById("googleCoordinates");
+    const address = convertChineseNumerals(addressInput.value);
+    const mapLink = `https://maps.google.com/?q=${encodeURIComponent(address)}`;
+    // 這裡的邏輯是基於您提供的範例網址轉換規則
+    const transformedLink = mapLink.replace(/http:\/\/googleusercontent\.com\/maps\.google\.com\/0/g, 'https://www.google.com/maps/place//@25.0624007,121.3655983,15z/');
+    // 實際應用可能需要更複雜的邏輯來獲取正確的地圖連結並提取座標
+    // 由於無法直接透過前端取得 Google Maps 的特定格式連結，
+    // 以下程式碼僅為範例，模擬您描述的提取邏輯
+    const mockReturnUrl = `https://www.google.com/maps/@25.033611,121.565000,17z`; // 模擬 Google Maps 網址
+    const regex = /@(-?\d+\.\d+),(-?\d+\.\d+),/;
+    const match = mockReturnUrl.match(regex);
+    if (match) {
+        googleCoordinatesInput.value = `${match[1]},${match[2]}`;
+    } else {
+        alert("無法從地圖連結中提取座標。");
+    }
+    // 實際情況下，您可能需要後端服務來處理地址轉換為特定格式的座標連結
+    console.log("產生地圖連結:", transformedLink); // 實際應用中可將連結導向新視窗
 }
 
-function showError(error) {
-  let message;
-  switch(error.code) {
-    case error.PERMISSION_DENIED:
-      message = "使用者拒絕了地理位置請求。";
-      break;
-    case error.POSITION_UNAVAILABLE:
-      message = "位置資訊不可用。";
-      break;
-    case error.TIMEOUT:
-      message = "請求使用者位置資訊逾時。";
-      break;
-    case error.UNKNOWN_ERROR:
-      message = "發生未知的錯誤。";
-      break;
-  }
-  document.getElementById("location").innerHTML = "錯誤： " + message;
+let userLatitude;
+let userLongitude;
+
+function getUserLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                userLatitude = position.coords.latitude;
+                userLongitude = position.coords.longitude;
+                document.getElementById("result").innerText = "使用者位置已取得，可以計算距離。";
+            },
+            function(error) {
+                let message;
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        message = "使用者拒絕了地理位置請求。";
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        message = "位置資訊不可用。";
+                        break;
+                    case error.TIMEOUT:
+                        message = "請求使用者位置資訊逾時。";
+                        break;
+                    case error.UNKNOWN_ERROR:
+                        message = "發生未知的錯誤。";
+                        break;
+                }
+                document.getElementById("result").innerText = "無法取得使用者位置：" + message;
+            }
+        );
+    } else {
+        document.getElementById("result").innerText = "您的瀏覽器不支援地理位置功能。";
+    }
 }
 
-// 網頁載入時呼叫 getLocation 函數
-window.onload = getLocation;
+function calculateDistance() {
+    if (!userLatitude || !userLongitude) {
+        getUserLocation(); // 嘗試再次獲取使用者位置
+        alert("正在獲取您的位置資訊，請稍後再試。");
+        return;
+    }
+
+    const googleCoordinatesInput = document.getElementById("googleCoordinates");
+    const coordinates = googleCoordinatesInput.value.split(',');
+    if (coordinates.length !== 2) {
+        alert("請先產生 Google 座標經緯度。");
+        return;
+    }
+
+    const lat1 = parseFloat(coordinates[0]);
+    const lon1 = parseFloat(coordinates[1]);
+    const lat2 = userLatitude;
+    const lon2 = userLongitude;
+
+    // Haversine formula to calculate distance
+    function toRadians(degrees) {
+        return degrees * Math.PI / 180;
+    }
+
+    const R = 6371e3; // metres
+    const φ1 = toRadians(lat1);
+    const φ2 = toRadians(lat2);
+    const Δφ = toRadians(lat2 - lat1);
+    const Δλ = toRadians(lon2 - lon1);
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    const distance = R * c;
+    document.getElementById("result").innerText = `直線距離：${Math.floor(distance)} 公尺`;
+}
+
+// 網頁載入時嘗試獲取使用者位置
+getUserLocation();
 </script>
 
 </body>
