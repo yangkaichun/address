@@ -1,146 +1,161 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>地址轉地圖與距離計算</title>
-<style>
-body { font-family: sans-serif; text-align: left; margin: 20px; }
-label { display: block; margin-bottom: 5px; }
-input[type="text"] { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
-button { padding: 10px 15px; margin-bottom: 10px; cursor: pointer; }
-#result { margin-top: 20px; font-weight: bold; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distance Calculator</title>
+    <style>
+        /* Basic CSS for layout - You'll need to enhance this */
+        body { font-family: sans-serif; }
+        .container { display: flex; flex-direction: column; align-items: center; }
+        input[type="text"] { padding: 8px; margin: 5px; border: 1px solid #ccc; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        #locationInfo, #distanceInfo { margin-top: 20px; font-weight: bold; }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <h2>Distance Calculator</h2>
 
-<h1>地址轉換與距離計算</h1>
+        <div id="currentLocation">
+            <p>Loading current location...</p>
+        </div>
 
-<div>
-    <label for="taiwanAddress">台灣地址 (中文數字將自動轉換為阿拉伯數字):</label>
-    <input type="text" id="taiwanAddress" name="taiwanAddress">
-    <button onclick="generateMapLink()">產生地圖連結</button>
-</div>
+        <div>
+            <label for="address">Taiwan Address:</label>
+            <input type="text" id="address" name="address">
+            <button onclick="generateMapLink()">Generate Map Link</button>
+        </div>
 
-<div>
-    <label for="googleCoordinates">Google 座標經緯度:</label>
-    <input type="text" id="googleCoordinates" name="googleCoordinates" readonly>
-</div>
+        <div>
+            <label for="coordinates">Google Coordinates:</label>
+            <input type="text" id="coordinates" name="coordinates" readonly>
+        </div>
 
-<button onclick="calculateDistance()">計算距離</button>
+        <button onclick="calculateDistance()">Calculate Distance</button>
 
-<div id="result"></div>
+        <div id="locationInfo">
+            <p>1. Mobile Location (Latitude, Longitude): <span id="mobileCoords"></span></p>
+            <p>2. Target Location (Latitude, Longitude): <span id="targetCoords"></span></p>
+            <p>3. Distance: <span id="distance"></span> meters</p>
+        </div>
+    </div>
 
-<script>
-const chineseToArabic = {
-    '一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7', '八': '8', '九': '9', '十': '10',
-    '零': '0', '壹': '1', '貳': '2', '參': '3', '肆': '4', '伍': '5', '陸': '6', '柒': '7', '捌': '8', '玖': '9', '拾': '10',
-};
+    <script>
+        let currentLatitude;
+        let currentLongitude;
+        let targetLatitude;
+        let targetLongitude;
 
-function convertChineseNumerals(address) {
-    return address.replace(/[一二三四五六七八九十零壹貳參肆伍陸柒捌玖拾]/g, function(match) {
-        return chineseToArabic[match] || match;
-    });
-}
-
-function generateMapLink() {
-    const addressInput = document.getElementById("taiwanAddress");
-    const googleCoordinatesInput = document.getElementById("googleCoordinates");
-    const address = convertChineseNumerals(addressInput.value);
-    const mapLink = `https://maps.google.com/?q=${encodeURIComponent(address)}`;
-    // 這裡的邏輯是基於您提供的範例網址轉換規則
-    const transformedLink = mapLink.replace(/http:\/\/googleusercontent\.com\/maps\.google\.com\/0/g, 'https://www.google.com/maps/place//@25.0624007,121.3655983,15z/');
-    // 實際應用可能需要更複雜的邏輯來獲取正確的地圖連結並提取座標
-    // 由於無法直接透過前端取得 Google Maps 的特定格式連結，
-    // 以下程式碼僅為範例，模擬您描述的提取邏輯
-    const mockReturnUrl = `https://www.google.com/maps/@25.033611,121.565000,17z`; // 模擬 Google Maps 網址
-    const regex = /@(-?\d+\.\d+),(-?\d+\.\d+),/;
-    const match = mockReturnUrl.match(regex);
-    if (match) {
-        googleCoordinatesInput.value = `${match[1]},${match[2]}`;
-    } else {
-        alert("無法從地圖連結中提取座標。");
-    }
-    // 實際情況下，您可能需要後端服務來處理地址轉換為特定格式的座標連結
-    console.log("產生地圖連結:", transformedLink); // 實際應用中可將連結導向新視窗
-}
-
-let userLatitude;
-let userLongitude;
-
-function getUserLocation() {
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            function(position) {
-                userLatitude = position.coords.latitude;
-                userLongitude = position.coords.longitude;
-                document.getElementById("result").innerText = "使用者位置已取得，可以計算距離。";
-            },
-            function(error) {
-                let message;
-                switch (error.code) {
-                    case error.PERMISSION_DENIED:
-                        message = "使用者拒絕了地理位置請求。";
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        message = "位置資訊不可用。";
-                        break;
-                    case error.TIMEOUT:
-                        message = "請求使用者位置資訊逾時。";
-                        break;
-                    case error.UNKNOWN_ERROR:
-                        message = "發生未知的錯誤。";
-                        break;
-                }
-                document.getElementById("result").innerText = "無法取得使用者位置：" + message;
+        // 1. Get Current Location
+        window.onload = function() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(showPosition, showError);
+            } else {
+                document.getElementById("currentLocation").innerHTML = "Geolocation is not supported by this browser.";
             }
-        );
-    } else {
-        document.getElementById("result").innerText = "您的瀏覽器不支援地理位置功能。";
-    }
-}
+        };
 
-function calculateDistance() {
-    if (!userLatitude || !userLongitude) {
-        getUserLocation(); // 嘗試再次獲取使用者位置
-        alert("正在獲取您的位置資訊，請稍後再試。");
-        return;
-    }
+        function showPosition(position) {
+            currentLatitude = position.coords.latitude;
+            currentLongitude = position.coords.longitude;
+            document.getElementById("currentLocation").innerHTML = `Current Location: Latitude ${currentLatitude.toFixed(6)}, Longitude ${currentLongitude.toFixed(6)}`;
+            document.getElementById("mobileCoords").textContent = `${currentLatitude.toFixed(6)}, ${currentLongitude.toFixed(6)}`;
+        }
 
-    const googleCoordinatesInput = document.getElementById("googleCoordinates");
-    const coordinates = googleCoordinatesInput.value.split(',');
-    if (coordinates.length !== 2) {
-        alert("請先產生 Google 座標經緯度。");
-        return;
-    }
+        function showError(error) {
+            let errorMsg;
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMsg = "User denied the request for Geolocation.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMsg = "Location information is unavailable.";
+                    break;
+                case error.TIMEOUT:
+                    errorMsg = "The request to get user location timed out.";
+                    break;
+                case error.UNKNOWN_ERROR:
+                    errorMsg = "An unknown error occurred.";
+                    break;
+            }
+            document.getElementById("currentLocation").innerHTML = errorMsg;
+        }
 
-    const lat1 = parseFloat(coordinates[0]);
-    const lon1 = parseFloat(coordinates[1]);
-    const lat2 = userLatitude;
-    const lon2 = userLongitude;
+        // 2. Convert Chinese Numerals (Basic Example - You'll need a more comprehensive solution)
+        function convertChineseNumerals(address) {
+            const mapping = {'一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7', '八': '8', '九': '9', '十': '10'};
+            let convertedAddress = address;
+            for (const chinese in mapping) {
+                convertedAddress = convertedAddress.replace(new RegExp(chinese, 'g'), mapping[chinese]);
+            }
+            // You might need to handle cases like 二十, 三十一, etc., for a full implementation.
+            return convertedAddress;
+        }
 
-    // Haversine formula to calculate distance
-    function toRadians(degrees) {
-        return degrees * Math.PI / 180;
-    }
+        // Attach an event listener to the address input for conversion
+        document.getElementById('address').addEventListener('blur', function() {
+            this.value = convertChineseNumerals(this.value);
+        });
 
-    const R = 6371e3; // metres
-    const φ1 = toRadians(lat1);
-    const φ2 = toRadians(lat2);
-    const Δφ = toRadians(lat2 - lat1);
-    const Δλ = toRadians(lon2 - lon1);
+        // 3. Generate Google Maps Link
+        function generateMapLink() {
+            const address = document.getElementById("address").value;
+            const encodedAddress = encodeURIComponent(address + ' Taiwan'); // Adding 'Taiwan' for better results
+            const mapLink = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+            // For demonstration, let's simulate the return and extraction
+            const simulatedReturn = `https://www.google.com/maps/place/%E6%A1%83%E5%9C%92%E5%B8%82%E9%BE%9C%E5%B1%B1%E5%8D%80%E6%96%87%E9%9D%92%E8%B7%AF2%E6%AE%B513%E8%99%9F/@25.0478064,121.3608766,17z/data=!3m1!4b1!4m5!3m4!1s0x3442a7a979896b1f:0x9c2289199609196f!8m2!3d25.0478064!4d121.3630653?entry=tts`;
+            extractCoordinates(simulatedReturn);
+            // In a real application, you might open this link or use a service to get coordinates.
+            console.log("Generated Map Link:", mapLink);
+            // For now, we'll simulate the extraction from a sample link.
+        }
 
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        // 4. Extract Coordinates
+        function extractCoordinates(url) {
+            const atIndex = url.indexOf('@');
+            if (atIndex !== -1) {
+                const substring = url.substring(atIndex + 1);
+                const commaIndex = substring.indexOf(',');
+                const slashIndex = substring.indexOf('/');
+                if (commaIndex !== -1 && slashIndex !== -1 && commaIndex < slashIndex) {
+                    const coordsPart = substring.substring(0, slashIndex);
+                    const parts = coordsPart.split(',');
+                    if (parts.length === 2) {
+                        targetLatitude = parseFloat(parts[0]);
+                        targetLongitude = parseFloat(parts[1]);
+                        document.getElementById("coordinates").value = `${targetLatitude.toFixed(6)}, ${targetLongitude.toFixed(6)}`;
+                        document.getElementById("targetCoords").textContent = `${targetLatitude.toFixed(6)}, ${targetLongitude.toFixed(6)}`;
+                    }
+                }
+            }
+        }
 
-    const distance = R * c;
-    document.getElementById("result").innerText = `直線距離：${Math.floor(distance)} 公尺`;
-}
+        // 5. Calculate Distance (Haversine Formula)
+        function calculateDistance() {
+            if (currentLatitude === undefined || currentLongitude === undefined || targetLatitude === undefined || targetLongitude === undefined) {
+                alert("Please make sure your current location is loaded and a target address has been processed.");
+                return;
+            }
 
-// 網頁載入時嘗試獲取使用者位置
-getUserLocation();
-</script>
+            const R = 6371e3; // metres
+            const φ1 = toRadians(currentLatitude);
+            const φ2 = toRadians(targetLatitude);
+            const Δφ = toRadians(targetLatitude - currentLatitude);
+            const Δλ = toRadians(targetLongitude - currentLongitude);
 
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            const distance = R * c; // in metres
+            document.getElementById("distance").textContent = Math.floor(distance);
+        }
+
+        function toRadians(degrees) {
+            return degrees * Math.PI / 180;
+        }
+    </script>
 </body>
 </html>
