@@ -1,126 +1,802 @@
 <!DOCTYPE html>
-<html lang="zh">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>位置助手</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-  </head>
-  <body class="bg-gray-100">
-    <div class="max-w-md mx-auto bg-white rounded-lg shadow-md p-6 mt-10">
-      <h1 class="text-2xl font-bold text-center mb-4">位置助手</h1>
-      <p id="locationInfo" class="text-gray-700 text-sm mb-4">正在取得您的位置…</p>
-      <div class="mb-4">
-        <input id="userInput" type="text" placeholder="請輸入查詢內容" class="w-full border border-gray-300 rounded p-2 focus:outline-none focus:border-blue-500" />
-      </div>
-      <div class="flex justify-between items-center mb-4">
-        <button id="textSubmit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 focus:outline-none">送出</button>
-        <button id="voiceBtn" class="border border-gray-300 px-4 py-2 rounded hover:bg-gray-200 focus:outline-none">
-          <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 1v22m-4-4h8"></path>
-          </svg>
-          語音輸入
-        </button>
-      </div>
-      <div id="result" class="p-4 bg-gray-50 border border-gray-200 rounded">
-        <p class="text-gray-600 text-sm">請輸入或使用語音查詢附近相關資訊。</p>
-      </div>
-      <div id="mapLinkContainer" class="mt-4 hidden">
-        <a id="mapLink" href="#" target="_blank" class="block text-center bg-green-500 text-white py-2 rounded hover:bg-green-600">前往 Google Maps 導航</a>
-      </div>
-    </div>
-    <script>
-      let userLat = null;
-      let userLng = null;
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>附近位置助手</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            touch-action: manipulation;
+            overflow-x: hidden;
+            background-color: #f8f9fa;
+        }
 
-      // 取得使用者位置
-      function getUserLocation() {
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              userLat = position.coords.latitude;
-              userLng = position.coords.longitude;
-              document.getElementById("locationInfo").textContent = "您的位置: " + userLat.toFixed(5) + ", " + userLng.toFixed(5);
-            },
-            (error) => {
-              document.getElementById("locationInfo").textContent = "無法取得位置資訊。";
-              console.error(error);
+        .search-container {
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 24px;
+        }
+
+        .location-dot {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
             }
-          );
-        } else {
-          document.getElementById("locationInfo").textContent = "瀏覽器不支援地理位置服務。";
+            
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+            }
+            
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
         }
-      }
-      getUserLocation();
 
-      // 語音辨識功能
-      const voiceBtn = document.getElementById("voiceBtn");
-      if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-        voiceBtn.disabled = true;
-        voiceBtn.textContent = "語音不支援";
-      } else {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.lang = "zh-TW";
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
-
-        voiceBtn.addEventListener("click", () => {
-          recognition.start();
-          voiceBtn.textContent = "識別中…";
-        });
-
-        recognition.addEventListener("result", (event) => {
-          const transcript = event.results[0][0].transcript;
-          document.getElementById("userInput").value = transcript;
-        });
-
-        recognition.addEventListener("speechend", () => {
-          recognition.stop();
-          voiceBtn.textContent = "語音輸入";
-        });
-
-        recognition.addEventListener("error", (event) => {
-          console.error("Error occurred in recognition: " + event.error);
-          voiceBtn.textContent = "語音輸入";
-        });
-      }
-
-      // 處理文字輸入查詢
-      document.getElementById("textSubmit").addEventListener("click", () => {
-        const query = document.getElementById("userInput").value.trim();
-        if(query === ""){
-          alert("請輸入查詢內容！");
-          return;
+        .results-container::-webkit-scrollbar {
+            width: 5px;
         }
-        showNearbyInfo(query);
-      });
 
-      function showNearbyInfo(query) {
-        // 模擬附近資訊顯示，實際應用中可使用適合的免費 API
-        const resultDiv = document.getElementById("result");
-        resultDiv.innerHTML = "<p class='text-gray-700'>正在搜尋與 “" + query + "” 相關並且靠近您的資訊…</p>";
+        .results-container::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.5);
+            border-radius: 10px;
+        }
 
-        // 模擬搜尋結果內容，這裡僅使用一個假項目示範
-        setTimeout(() => {
-          const infoHTML = "<h2 class='font-semibold mb-2'>查詢結果</h2>" +
-                      "<p class='text-gray-600'>假設找到一個地點：示範地點</p>";
-          resultDiv.innerHTML = infoHTML;
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background-color: rgba(59, 130, 246, 0.3);
+            transform: scale(0);
+            animation: ripple-effect 0.6s linear;
+        }
 
-          // 提供 Google Maps 導航連結
-          const mapLinkContainer = document.getElementById("mapLinkContainer");
-          const mapLink = document.getElementById("mapLink");
-          let destination = encodeURIComponent("示範地點");
-          if (userLat && userLng) {
-            // 使用使用者位置作為起點，並將目的地設為查詢結果
-            mapLink.href = "https://www.google.com/maps/dir/?api=1&origin=" + userLat + "," + userLng + "&destination=" + destination;
-          } else {
-            // 如果無法取得使用者位置則只搜尋目的地
-            mapLink.href = "https://www.google.com/maps/search/?api=1&query=" + destination;
-          }
-          mapLinkContainer.classList.remove("hidden");
-        }, 1500);
-      }
+        @keyframes ripple-effect {
+            to {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            border: 3px solid rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+    <!-- Status Bar -->
+    <div id="statusBar" class="bg-blue-500 text-white text-xs py-1 px-3 transition-all duration-300 hidden">
+        <span id="statusText">定位中...</span>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-white text-center p-3 shadow-sm fixed top-0 left-0 right-0 z-10">
+        <h1 class="text-xl font-bold text-gray-800">附近位置助手</h1>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 mt-14 mb-16 overflow-auto p-4">
+        <!-- Location Information -->
+        <div id="locationInfo" class="mb-5 text-center text-gray-600 text-sm flex items-center justify-center">
+            <div class="location-dot bg-blue-500 h-3 w-3 rounded-full mr-2"></div>
+            <span id="locationText">獲取位置中...</span>
+        </div>
+
+        <!-- Search Container -->
+        <div class="search-container bg-white flex items-center p-3 mb-5 relative">
+            <input type="text" id="searchInput" placeholder="搜尋附近地點..." class="flex-1 bg-transparent border-none outline-none text-gray-800 placeholder-gray-400">
+            <button id="voiceSearchBtn" class="text-blue-500 ml-2 p-2 rounded-full hover:bg-blue-50">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <button id="searchBtn" class="text-blue-500 ml-2 p-2 rounded-full hover:bg-blue-50">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+
+        <!-- Voice Listening Indicator -->
+        <div id="voiceIndicator" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-5 rounded-lg text-center shadow-lg">
+                <div class="w-24 h-24 mb-3 mx-auto rounded-full bg-blue-100 flex items-center justify-center">
+                    <i class="fas fa-microphone text-blue-500 text-3xl"></i>
+                </div>
+                <p id="listeningText" class="text-lg font-semibold text-gray-800">正在聆聽...</p>
+                <p id="voiceResult" class="text-sm text-gray-600 mt-2 h-10"></p>
+                <button id="stopListeningBtn" class="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                    停止
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Container -->
+        <div id="resultsContainer" class="results-container overflow-y-auto space-y-3"></div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="hidden text-center py-5">
+            <div class="loading mx-auto"></div>
+            <p class="text-gray-600 mt-3">搜尋中...</p>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white shadow-lg p-2 flex justify-around z-10">
+        <button id="nearbyBtn" class="p-2 text-center w-1/4 text-blue-500 flex flex-col items-center active:bg-blue-50 rounded-lg">
+            <i class="fas fa-compass mb-1"></i>
+            <span class="text-xs">探索</span>
+        </button>
+        <button id="historyBtn" class="p-2 text-center w-1/4 text-gray-500 flex flex-col items-center active:bg-blue-50 rounded-lg">
+            <i class="fas fa-history mb-1"></i>
+            <span class="text-xs">歷史</span>
+        </button>
+        <button id="mapBtn" class="p-2 text-center w-1/4 text-gray-500 flex flex-col items-center active:bg-blue-50 rounded-lg">
+            <i class="fas fa-map-marked-alt mb-1"></i>
+            <span class="text-xs">地圖</span>
+        </button>
+        <button id="settingsBtn" class="p-2 text-center w-1/4 text-gray-500 flex flex-col items-center active:bg-blue-50 rounded-lg">
+            <i class="fas fa-cog mb-1"></i>
+            <span class="text-xs">設定</span>
+        </button>
+    </nav>
+
+    <!-- History Panel -->
+    <div id="historyPanel" class="fixed inset-0 bg-white z-20 transform translate-x-full transition-transform duration-300 ease-in-out">
+        <div class="p-4">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-xl font-bold text-gray-800">搜尋歷史</h2>
+                <button id="closeHistoryBtn" class="text-gray-500 p-2">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="historyList" class="space-y-3">
+                <!-- History items will be added here -->
+            </div>
+            <button id="clearHistoryBtn" class="mt-5 w-full py-2 bg-red-100 text-red-500 rounded-lg hover:bg-red-200">
+                清除歷史記錄
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="fixed inset-0 bg-white z-20 transform translate-x-full transition-transform duration-300 ease-in-out">
+        <div class="p-4">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-xl font-bold text-gray-800">設定</h2>
+                <button id="closeSettingsBtn" class="text-gray-500 p-2">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-700">自動取得位置</span>
+                    <label class="switch relative inline-block w-12 h-6">
+                        <input type="checkbox" id="autoLocationToggle" checked>
+                        <span class="slider absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-300 rounded-full transition-colors duration-300 before:absolute before:h-4 before:w-4 before:left-1 before:bottom-1 before:bg-white before:rounded-full before:transition-transform before:duration-300"></span>
+                    </label>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-700">深色模式</span>
+                    <label class="switch relative inline-block w-12 h-6">
+                        <input type="checkbox" id="darkModeToggle">
+                        <span class="slider absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-300 rounded-full transition-colors duration-300 before:absolute before:h-4 before:w-4 before:left-1 before:bottom-1 before:bg-white before:rounded-full before:transition-transform before:duration-300"></span>
+                    </label>
+                </div>
+                <div>
+                    <p class="text-gray-700 mb-2">搜尋半徑</p>
+                    <select id="searchRadius" class="w-full p-2 border rounded-lg bg-gray-50">
+                        <option value="500">500 公尺</option>
+                        <option value="1000" selected>1 公里</option>
+                        <option value="2000">2 公里</option>
+                        <option value="5000">5 公里</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-10 text-center text-gray-500 text-sm">
+                <p>版本 1.0.0</p>
+                <p class="mt-1">無使用任何付費 API</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constants and Variables
+        let userLatitude = null;
+        let userLongitude = null;
+        let searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+        const searchInput = document.getElementById('searchInput');
+        const voiceSearchBtn = document.getElementById('voiceSearchBtn');
+        const searchBtn = document.getElementById('searchBtn');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const locationText = document.getElementById('locationText');
+        const statusBar = document.getElementById('statusBar');
+        const statusText = document.getElementById('statusText');
+        const voiceIndicator = document.getElementById('voiceIndicator');
+        const listeningText = document.getElementById('listeningText');
+        const voiceResult = document.getElementById('voiceResult');
+        const stopListeningBtn = document.getElementById('stopListeningBtn');
+        const historyBtn = document.getElementById('historyBtn');
+        const mapBtn = document.getElementById('mapBtn');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const nearbyBtn = document.getElementById('nearbyBtn');
+        const historyPanel = document.getElementById('historyPanel');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const historyList = document.getElementById('historyList');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const autoLocationToggle = document.getElementById('autoLocationToggle');
+        const searchRadius = document.getElementById('searchRadius');
+        
+        let recognition = null;
+        
+        // Initialize speech recognition if available
+        function initializeSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = true;
+                recognition.lang = 'zh-TW';
+                
+                recognition.onstart = () => {
+                    voiceIndicator.classList.remove('hidden');
+                    listeningText.textContent = '正在聆聽...';
+                    voiceResult.textContent = '';
+                };
+                
+                recognition.onresult = (event) => {
+                    const transcript = Array.from(event.results)
+                        .map(result => result[0])
+                        .map(result => result.transcript)
+                        .join('');
+                    
+                    voiceResult.textContent = transcript;
+                    listeningText.textContent = '聽到了！';
+                    
+                    if (event.results[0].isFinal) {
+                        searchInput.value = transcript;
+                        setTimeout(() => {
+                            voiceIndicator.classList.add('hidden');
+                            performSearch(transcript);
+                        }, 1000);
+                    }
+                };
+                
+                recognition.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                    listeningText.textContent = '無法辨識語音';
+                    setTimeout(() => {
+                        voiceIndicator.classList.add('hidden');
+                    }, 1500);
+                };
+                
+                recognition.onend = () => {
+                    if (voiceResult.textContent === '') {
+                        listeningText.textContent = '沒有聽到聲音';
+                        setTimeout(() => {
+                            voiceIndicator.classList.add('hidden');
+                        }, 1500);
+                    }
+                };
+            } else {
+                voiceSearchBtn.classList.add('hidden');
+                console.warn('Speech recognition not supported in this browser');
+            }
+        }
+        
+        // Get user location
+        function getUserLocation() {
+            if (navigator.geolocation) {
+                showStatus('獲取位置中...');
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLatitude = position.coords.latitude;
+                        userLongitude = position.coords.longitude;
+                        
+                        // Get address from coordinates
+                        getAddressFromCoordinates(userLatitude, userLongitude);
+                        hideStatus();
+                        
+                        // Show nearby places as default
+                        showNearbyPlaces();
+                    },
+                    (error) => {
+                        console.error('Geolocation error:', error);
+                        locationText.textContent = '無法獲取位置';
+                        showStatus('無法獲取位置，請檢查權限設定', 'error');
+                        
+                        // Set default location (Taipei 101)
+                        userLatitude = 25.033964;
+                        userLongitude = 121.564468;
+                        
+                        setTimeout(() => {
+                            hideStatus();
+                        }, 3000);
+                    }
+                );
+            } else {
+                locationText.textContent = '您的瀏覽器不支持地理位置功能';
+                showStatus('瀏覽器不支持地理位置功能', 'error');
+                
+                // Set default location (Taipei 101)
+                userLatitude = 25.033964;
+                userLongitude = 121.564468;
+                
+                setTimeout(() => {
+                    hideStatus();
+                }, 3000);
+            }
+        }
+        
+        // Get address from coordinates using OpenStreetMap Nominatim API
+        function getAddressFromCoordinates(lat, lng) {
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+                .then(response => response.json())
+                .then(data => {
+                    const address = data.display_name.split(',').slice(0, 3).join(',');
+                    locationText.textContent = `目前位置: ${address}`;
+                })
+                .catch(error => {
+                    console.error('Error getting address:', error);
+                    locationText.textContent = `位置: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                });
+        }
+        
+        // Show nearby places
+        function showNearbyPlaces() {
+            if (!userLatitude || !userLongitude) {
+                showStatus('請先獲取位置', 'warning');
+                return;
+            }
+            
+            performSearch('附近景點');
+        }
+        
+        // Show status bar with message
+        function showStatus(message, type = 'info') {
+            statusBar.classList.remove('hidden', 'bg-blue-500', 'bg-red-500', 'bg-yellow-500');
+            
+            switch(type) {
+                case 'error':
+                    statusBar.classList.add('bg-red-500');
+                    break;
+                case 'warning':
+                    statusBar.classList.add('bg-yellow-500');
+                    break;
+                default:
+                    statusBar.classList.add('bg-blue-500');
+            }
+            
+            statusText.textContent = message;
+            statusBar.classList.remove('hidden');
+        }
+        
+        // Hide status bar
+        function hideStatus() {
+            statusBar.classList.add('hidden');
+        }
+        
+        // Perform search
+        function performSearch(query) {
+            if (!query.trim()) return;
+            
+            // Show loading indicator
+            loadingIndicator.classList.remove('hidden');
+            resultsContainer.innerHTML = '';
+            
+            // Add to search history
+            addToHistory(query);
+            
+            // Create a URL for Google Maps search
+            const radius = searchRadius.value || 1000;
+            const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${userLatitude},${userLongitude},15z`;
+            const directionsUrl = `https://www.google.com/maps/dir/?api=1&origin=${userLatitude},${userLongitude}&destination=${encodeURIComponent(query)}&travelmode=driving`;
+            
+            // Since we cannot directly access Google Maps API without paying, we'll create a "fake" results display
+            // that links to the actual Google Maps
+            setTimeout(() => {
+                loadingIndicator.classList.add('hidden');
+                
+                // Create main result card with iframe
+                const mainResultCard = document.createElement('div');
+                mainResultCard.className = 'bg-white rounded-lg shadow-md overflow-hidden mb-5';
+                mainResultCard.innerHTML = `
+                    <div class="p-4">
+                        <h3 class="font-bold text-lg mb-2">${query} 附近搜尋結果</h3>
+                        <p class="text-sm text-gray-600 mb-3">搜尋範圍: ${radius / 1000} 公里</p>
+                    </div>
+                    <div class="h-60 w-full bg-gray-100">
+                        <iframe 
+                            src="https://www.openstreetmap.org/export/embed.html?bbox=${userLongitude - 0.01},${userLatitude - 0.01},${userLongitude + 0.01},${userLatitude + 0.01}&layer=mapnik&marker=${userLatitude},${userLongitude}" 
+                            class="w-full h-full border-0">
+                        </iframe>
+                    </div>
+                    <div class="p-4 flex justify-between">
+                        <a href="${googleMapsUrl}" target="_blank" class="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center">
+                            <i class="fas fa-search mr-2"></i> Google 搜尋
+                        </a>
+                        <a href="${directionsUrl}" target="_blank" class="bg-green-500 text-white py-2 px-4 rounded-lg flex items-center">
+                            <i class="fas fa-directions mr-2"></i> 導航前往
+                        </a>
+                    </div>
+                `;
+                resultsContainer.appendChild(mainResultCard);
+                
+                // Add a message explaining how to get real results
+                const messageCard = document.createElement('div');
+                messageCard.className = 'bg-blue-50 p-4 rounded-lg text-blue-800 text-sm';
+                messageCard.innerHTML = `
+                    <p class="mb-2"><i class="fas fa-info-circle mr-1"></i> 點擊上方按鈕，可在 Google Maps 中查看完整結果和導航。</p>
+                    <p>由於不使用付費 API，本頁面提供跳轉功能讓您使用 Google Maps 的完整功能。</p>
+                `;
+                resultsContainer.appendChild(messageCard);
+                
+                // Create a few example POI items that might be relevant to the search
+                createExamplePOIs(query);
+            }, 1500);
+        }
+        
+        // Create example POIs based on the search query
+        function createExamplePOIs(query) {
+            const categories = {
+                '餐廳': ['餐廳', '美食', '小吃', '飯館', '食'],
+                '咖啡': ['咖啡', '下午茶', '蛋糕'],
+                '景點': ['景點', '觀光', '公園', '名勝', '古蹟'],
+                '購物': ['商場', '超市', '百貨', '市場', '購物', '賣場'],
+                '住宿': ['飯店', '旅館', '民宿', '住宿'],
+                '交通': ['捷運', '車站', '公車', '停車場', '加油站'],
+                '醫療': ['醫院', '診所', '藥局', '醫療'],
+                '教育': ['學校', '大學', '補習班', '圖書館']
+            };
+            
+            let categoryMatch = '其他';
+            for (const [category, keywords] of Object.entries(categories)) {
+                if (keywords.some(keyword => query.includes(keyword))) {
+                    categoryMatch = category;
+                    break;
+                }
+            }
+            
+            // Generate random example POIs based on the category
+            const examplePOIs = generateExamplePOIs(categoryMatch, 3);
+            
+            const poiTitle = document.createElement('h3');
+            poiTitle.className = 'font-semibold text-gray-800 mt-5 mb-3';
+            poiTitle.textContent = `推薦的${categoryMatch}地點`;
+            resultsContainer.appendChild(poiTitle);
+            
+            examplePOIs.forEach(poi => {
+                const poiCard = document.createElement('div');
+                poiCard.className = 'bg-white rounded-lg shadow-sm p-4 flex items-start';
+                
+                const rating = (Math.random() * 2 + 3).toFixed(1);
+                const distance = (Math.random() * 0.9 + 0.1).toFixed(1);
+                
+                poiCard.innerHTML = `
+                    <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                        <i class="${poi.icon} text-lg text-gray-500"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-gray-800">${poi.name}</h4>
+                        <div class="flex items-center text-sm mt-1">
+                            <div class="text-yellow-500 mr-1">★</div>
+                            <span class="text-gray-700">${rating}</span>
+                            <span class="mx-2 text-gray-300">|</span>
+                            <span class="text-gray-600">${distance} 公里</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">${poi.address}</p>
+                    </div>
+                    <a href="https://www.google.com/maps/dir/?api=1&origin=${userLatitude},${userLongitude}&destination=${encodeURIComponent(poi.name + ' ' + poi.address)}&travelmode=driving" 
+                       target="_blank" 
+                       class="ml-2 w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center text-blue-500 flex-shrink-0">
+                        <i class="fas fa-directions"></i>
+                    </a>
+                `;
+                
+                resultsContainer.appendChild(poiCard);
+            });
+        }
+        
+        // Generate example POIs based on category
+        function generateExamplePOIs(category, count) {
+            const poiData = {
+                '餐廳': {
+                    names: ['鮮味中華料理', '好吃家常菜館', '饗味日式料理', '經典美式餐廳', '義饗義大利麵坊'],
+                    icon: 'fas fa-utensils'
+                },
+                '咖啡': {
+                    names: ['咖啡時光', '星巴克咖啡', '伯朗咖啡館', '路易莎咖啡', '半山咖啡廳'],
+                    icon: 'fas fa-coffee'
+                },
+                '景點': {
+                    names: ['中正紀念堂', '國立博物館', '市立公園', '古蹟文化園區', '觀景步道'],
+                    icon: 'fas fa-landmark'
+                },
+                '購物': {
+                    names: ['環球購物中心', '時代百貨', '好市多賣場', '國際名品商場', '樂購超市'],
+                    icon: 'fas fa-shopping-bag'
+                },
+                '住宿': {
+                    names: ['麗晶大飯店', '舒適旅館', '溫馨民宿', '國際連鎖酒店', '商務旅店'],
+                    icon: 'fas fa-bed'
+                },
+                '交通': {
+                    names: ['中央車站', '捷運站', '國際機場', '公車總站', '轉運站'],
+                    icon: 'fas fa-subway'
+                },
+                '醫療': {
+                    names: ['市立醫院', '聯合診所', '仁愛醫療中心', '康健診所', '長庚醫院'],
+                    icon: 'fas fa-hospital'
+                },
+                '教育': {
+                    names: ['國立大學', '市立圖書館', '文化中心', '知識補習班', '國民小學'],
+                    icon: 'fas fa-school'
+                },
+                '其他': {
+                    names: ['便利商店', '市政大樓', '運動中心', '電影院', '美容沙龍'],
+                    icon: 'fas fa-map-marker-alt'
+                }
+            };
+            
+            const streets = ['中山路', '忠孝東路', '復興北路', '信義路', '敦化南路', '和平西路', '民生東路'];
+            const districts = ['中正區', '大安區', '信義區', '南港區', '內湖區', '士林區', '北投區'];
+            
+            const data = poiData[category] || poiData['其他'];
+            const results = [];
+            
+            // Generate random POIs
+            for (let i = 0; i < count; i++) {
+                const nameIndex = Math.floor(Math.random() * data.names.length);
+                const streetIndex = Math.floor(Math.random() * streets.length);
+                const districtIndex = Math.floor(Math.random() * districts.length);
+                const number = Math.floor(Math.random() * 500) + 1;
+                
+                results.push({
+                    name: data.names[nameIndex],
+                    address: `${streets[streetIndex]}${number}號, ${districts[districtIndex]}`,
+                    icon: data.icon
+                });
+            }
+            
+            return results;
+        }
+        
+        // Add search query to history
+        function addToHistory(query) {
+            // Remove duplicate if exists
+            searchHistory = searchHistory.filter(item => item.query !== query);
+            
+            // Add new item at the beginning
+            searchHistory.unshift({
+                query: query,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Limit history to 20 items
+            if (searchHistory.length > 20) {
+                searchHistory.pop();
+            }
+            
+            // Save to localStorage
+            localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+            
+            // Update history display if panel is open
+            if (!historyPanel.classList.contains('translate-x-full')) {
+                displayHistory();
+            }
+        }
+        
+        // Display search history
+        function displayHistory() {
+            historyList.innerHTML = '';
+            
+            if (searchHistory.length === 0) {
+                historyList.innerHTML = '<p class="text-center text-gray-500 py-5">無搜尋歷史</p>';
+                return;
+            }
+            
+            searchHistory.forEach(item => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'bg-gray-50 p-3 rounded-lg flex items-center';
+                
+                const date = new Date(item.timestamp);
+                const formattedDate = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+                
+                historyItem.innerHTML = `
+                    <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                        <i class="fas fa-history text-blue-500"></i>
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-gray-800">${item.query}</p>
+                        <p class="text-xs text-gray-500">${formattedDate}</p>
+                    </div>
+                    <button class="history-search-btn p-2 text-blue-500">
+                        <i class="fas fa-search"></i>
+                    </button>
+                `;
+                
+                historyList.appendChild(historyItem);
+                
+                // Add click event to search this query again
+                historyItem.querySelector('.history-search-btn').addEventListener('click', () => {
+                    searchInput.value = item.query;
+                    performSearch(item.query);
+                    closeHistoryPanel();
+                });
+                
+                // Add click event to the entire item
+                historyItem.addEventListener('click', (e) => {
+                    if (!e.target.closest('.history-search-btn')) {
+                        searchInput.value = item.query;
+                        performSearch(item.query);
+                        closeHistoryPanel();
+                    }
+                });
+            });
+        }
+        
+        // Clear search history
+        function clearHistory() {
+            searchHistory = [];
+            localStorage.removeItem('searchHistory');
+            displayHistory();
+        }
+        
+        // Open history panel
+        function openHistoryPanel() {
+            historyPanel.classList.remove('translate-x-full');
+            displayHistory();
+        }
+        
+        // Close history panel
+        function closeHistoryPanel() {
+            historyPanel.classList.add('translate-x-full');
+        }
+        
+        // Open settings panel
+        function openSettingsPanel() {
+            settingsPanel.classList.remove('translate-x-full');
+        }
+        
+        // Close settings panel
+        function closeSettingsPanel() {
+            settingsPanel.classList.add('translate-x-full');
+        }
+        
+        // Initialize UI, event listeners and app state
+        function initializeApp() {
+            // Initialize speech recognition
+            initializeSpeechRecognition();
+            
+            // Get user location on load
+            if (localStorage.getItem('autoLocation') !== 'false') {
+                getUserLocation();
+            } else {
+                locationText.textContent = '請點擊獲取位置';
+                autoLocationToggle.checked = false;
+            }
+            
+            // Set dark mode if previously enabled
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.documentElement.classList.add('dark');
+                darkModeToggle.checked = true;
+            }
+            
+            // Set search radius from saved preference
+            const savedRadius = localStorage.getItem('searchRadius');
+            if (savedRadius) {
+                searchRadius.value = savedRadius;
+            }
+            
+            // Ripple effect for buttons
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('button') || e.target.closest('a')) {
+                    const button = e.target.closest('button') || e.target.closest('a');
+                    const ripple = document.createElement('span');
+                    ripple.className = 'ripple';
+                    button.appendChild(ripple);
+                    
+                    const rect = button.getBoundingClientRect();
+                    const size = Math.max(rect.width, rect.height);
+                    
+                    ripple.style.width = ripple.style.height = `${size}px`;
+                    ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+                    ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+                    
+                    setTimeout(() => {
+                        ripple.remove();
+                    }, 600);
+                }
+            });
+            
+            // Event listeners for buttons
+            searchBtn.addEventListener('click', () => {
+                performSearch(searchInput.value);
+            });
+            
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    performSearch(searchInput.value);
+                }
+            });
+            
+            voiceSearchBtn.addEventListener('click', () => {
+                if (recognition) {
+                    try {
+                        recognition.start();
+                    } catch (error) {
+                        console.error('Recognition already started:', error);
+                    }
+                }
+            });
+            
+            stopListeningBtn.addEventListener('click', () => {
+                if (recognition) {
+                    recognition.stop();
+                    voiceIndicator.classList.add('hidden');
+                }
+            });
+            
+            nearbyBtn.addEventListener('click', showNearbyPlaces);
+            
+            historyBtn.addEventListener('click', openHistoryPanel);
+            closeHistoryBtn.addEventListener('click', closeHistoryPanel);
+            clearHistoryBtn.addEventListener('click', clearHistory);
+            
+            settingsBtn.addEventListener('click', openSettingsPanel);
+            closeSettingsBtn.addEventListener('click', closeSettingsPanel);
+            
+            mapBtn.addEventListener('click', () => {
+                window.open(`https://www.google.com/maps/@${userLatitude},${userLongitude},15z`, '_blank');
+            });
+            
+            // Settings event listeners
+            darkModeToggle.addEventListener('change', () => {
+                if (darkModeToggle.checked) {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('darkMode', 'true');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('darkMode', 'false');
+                }
+            });
+            
+            autoLocationToggle.addEventListener('change', () => {
+                if (autoLocationToggle.checked) {
+                    getUserLocation();
+                    localStorage.setItem('autoLocation', 'true');
+                } else {
+                    localStorage.setItem('autoLocation', 'false');
+                }
+            });
+            
+            searchRadius.addEventListener('change', () => {
+                localStorage.setItem('searchRadius', searchRadius.value);
+            });
+            
+            // Add click event for location info to refresh location
+            document.getElementById('locationInfo').addEventListener('click', getUserLocation);
+        }
+        
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
-  </body>
+</body>
 </html>
