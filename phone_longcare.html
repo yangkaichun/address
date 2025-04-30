@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>國衛院 AI語音地圖資源與長照地圖 V4.21 </title> <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <title>國衛院 AI語音地圖資源與長照地圖 V4.22 </title> <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="icon" href="NHRI_logo.ico" type="image/x-icon" / >
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <style>
@@ -51,7 +50,7 @@
     </div>
 
     <header class="bg-white text-center p-3 shadow-sm fixed top-0 left-0 right-0 z-10">
-        <h1 class="text-xl font-bold text-gray-800">國衛院 AI語音地圖資源與長照地圖 V4.21</h1>
+        <h1 class="text-xl font-bold text-gray-800">國衛院 AI語音地圖資源與長照地圖 V4.22</h1>
     </header>
 
     <main class="flex-1 mt-14 mb-16 overflow-auto p-4">
@@ -579,24 +578,18 @@
                  resultsContainer.appendChild(messageCard);
 
 
-                 // Create example POIs based on search type
-                 if (currentSearchType === 'general') {
-                    createExamplePOIs(query); /* [cite: 138] */
-                 } else {
-                     createLtcExamplePOIs(query); /* [cite: 150] */
+                 // *** MODIFICATION: Removed createExamplePOIs call for general search ***
+                 if (currentSearchType === 'ltc') {
+                     createLtcExamplePOIs(query);
                  }
-
-                 // --- Removed Old Card Generation ---
-                 /*
-                 // Old General Search Card generation
-                 // Old LTC Search Card generation
-                 */
+                 // No longer showing example POIs for general search, this hides "附近景點" examples
 
             }, 1500); // Simulate network delay [cite: 139, 151]
         }
 
-        // Create example POIs based on the search query (Unchanged)
+        // Create example POIs based on the search query (Only function definition kept, not called for general search)
         function createExamplePOIs(query) {
+            // Function is kept but not called anymore in performSearch for general search
             const categories = {
                 '餐廳': ['餐廳', '美食', '小吃', '飯館', '食'],
                 '咖啡': ['咖啡', '下午茶', '蛋糕'],
@@ -646,7 +639,6 @@
             });
         }
 
-        // **** MODIFICATION: Removed the title and examples for "台北101附近..." ****
         // Create LTC-specific example POIs (Modified to remove specific title and examples)
         function createLtcExamplePOIs(query) {
              // The logic to determine the type match remains useful for context.
@@ -665,18 +657,6 @@
                      break; /* [cite: 167] */
                  }
              }
-
-             // --- Removed Example Title and POI Generation ---
-             /*
-             const ltcPOIs = generateLtcExamplePOIs(typeMatch, 3); // [cite: 167]
-             const poiTitle = document.createElement('h3'); // [cite: 168]
-             poiTitle.className = 'font-semibold text-gray-800 mt-5 mb-3';
-             // poiTitle.textContent = `範例:台北101附近${typeMatch}照顧資源`; // REMOVED THIS LINE [cite: 168]
-             // resultsContainer.appendChild(poiTitle); // REMOVED THIS LINE
-             ltcPOIs.forEach(poi => { // [cite: 169]
-                 // ... (POI card generation logic removed) ...
-             });
-             */
 
             // Add information about contacting 1966 (Keep this useful info)
             const contactCard = document.createElement('div'); /* [cite: 178] */
