@@ -447,12 +447,12 @@
             const isHidden = mapPreviewContainer.classList.contains('hidden');
             if (isHidden) {
                 mapPreviewContainer.classList.remove('hidden');
-                toggleMapPreviewBtn.innerHTML = '<i class="fas fa-map-marked-alt mr-2"></i> 隱藏預覽地圖';
+                toggleMapPreviewBtn.innerHTML = '<i class="fas fa-map-marked-alt mr-2"></i> 隱藏您所在位置';
                 // Ensure the map is updated when shown
                 updateMapPreview();
             } else {
                 mapPreviewContainer.classList.add('hidden');
-                toggleMapPreviewBtn.innerHTML = '<i class="fas fa-map-marked-alt mr-2"></i> 顯示預覽地圖';
+                toggleMapPreviewBtn.innerHTML = '<i class="fas fa-map-marked-alt mr-2"></i> 顯示您所在位置';
             }
         }
         // **** MODIFICATION END ****
