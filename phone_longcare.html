@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>國衛院 AI語音地圖資源與長照地圖 V4.22</title>
+    <title>國衛院 AI語音地圖資源與長照地圖 V4.30</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link rel="icon" href="https://www.nhri.edu.tw/favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <style>
         body {
@@ -107,22 +106,6 @@
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-        
-        .search-buttons {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 10px;
-            margin-bottom: 15px;
-        }
-        
-        .map-container {
-            margin-top: 15px;
-            margin-bottom: 15px;
-            height: 300px;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
     </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -133,7 +116,7 @@
 
     <!-- Header -->
     <header class="bg-white text-center p-3 shadow-sm fixed top-0 left-0 right-0 z-10">
-        <h1 class="text-xl font-bold text-gray-800">國衛院 AI語音地圖資源與長照地圖 V4.22</h1>
+        <h1 class="text-xl font-bold text-gray-800">國衛院 AI語音地圖資源與長照地圖 V4.30</h1>
     </header>
 
     <!-- Main Content -->
@@ -151,7 +134,7 @@
         </div>
 
         <!-- Search Container -->
-        <div class="search-container bg-white flex items-center p-3 mb-2 relative">
+        <div class="search-container bg-white flex items-center p-3 mb-5 relative">
             <input type="text" id="searchInput" placeholder="搜尋附近地點..." class="flex-1 bg-transparent border-none outline-none text-gray-800 placeholder-gray-400">
             <button id="voiceSearchBtn" class="text-blue-500 ml-2 p-2 rounded-full hover:bg-blue-50">
                 <i class="fas fa-microphone"></i>
@@ -159,16 +142,6 @@
             <button id="searchBtn" class="text-blue-500 ml-2 p-2 rounded-full hover:bg-blue-50">
                 <i class="fas fa-search"></i>
             </button>
-        </div>
-        
-        <!-- Search Buttons (Moved here from results) -->
-        <div id="searchButtonsContainer" class="search-buttons hidden">
-            <a id="searchResultsBtn" href="#" target="_blank" class="bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center justify-center flex-1 mr-2">
-                <i class="fas fa-search mr-2"></i> 請點我查看搜尋結果
-            </a>
-            <a id="directNavigationBtn" href="#" target="_blank" class="bg-green-500 text-white py-2 px-4 rounded-lg flex items-center justify-center flex-1">
-                <i class="fas fa-directions mr-2"></i> 直接導航到最近位置
-            </a>
         </div>
 
         <!-- Voice Listening Indicator -->
@@ -185,6 +158,9 @@
             </div>
         </div>
 
+        <!-- Results Container -->
+        <div id="resultsContainer" class="results-container overflow-y-auto space-y-3"></div>
+
         <!-- Loading Indicator -->
         <div id="loadingIndicator" class="hidden text-center py-5">
             <div class="loading mx-auto"></div>
@@ -192,13 +168,8 @@
         </div>
 
         <!-- Map Container (Hidden by default) -->
-        <div id="mapContainer" class="map-container hidden">
-            <iframe id="mapFrame" src="about:blank" width="100%" height="100%" frameborder="0"></iframe>
-        </div>
-
-        <!-- LTC Map Container (Hidden by default) -->
-        <div id="ltcMapContainer" class="ltc-iframe-container hidden mt-3 mb-5 h-80">
-            <iframe id="ltcMapIframe" src="about:blank" width="100%" height="100%" frameborder="0"></iframe>
+        <div id="mapContainer" class="ltc-iframe-container hidden mt-3 mb-5 h-80">
+            <iframe id="mapIframe" src="about:blank" width="100%" height="100%" frameborder="0"></iframe>
         </div>
     </main>
 
@@ -301,7 +272,7 @@
             <div class="bg-white rounded-lg shadow-md p-4 mb-5">
                 <h3 class="font-bold text-gray-700 mb-3">衛福部長照地圖</h3>
                 <p class="text-sm text-gray-600 mb-3">點擊下方按鈕，查看衛福部提供的完整長照資源地圖</p>
-                <a href="https://ltcpap.mohw.gov.tw/molc/map" target="_blank" class="block w-full py-3 bg-blue-500 text-white rounded-lg text-center font-medium">
+                <a href="https://ltcpap.mohw.gov.tw/public/" target="_blank" class="block w-full py-3 bg-blue-500 text-white rounded-lg text-center font-medium">
                     <i class="fas fa-external-link-alt mr-2"></i> 開啟衛福部長照地圖
                 </a>
             </div>
@@ -336,9 +307,13 @@
         let userLongitude = null;
         let searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
         let currentSearchType = localStorage.getItem('defaultSearchType') || 'general';
+        const searchRadius = 1000; // Default 1km radius
+        
+        // DOM Elements
         const searchInput = document.getElementById('searchInput');
         const voiceSearchBtn = document.getElementById('voiceSearchBtn');
         const searchBtn = document.getElementById('searchBtn');
+        const resultsContainer = document.getElementById('resultsContainer');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const locationText = document.getElementById('locationText');
         const statusBar = document.getElementById('statusBar');
@@ -359,43 +334,58 @@
         const clearHistoryBtn = document.getElementById('clearHistoryBtn');
         const generalSearchTab = document.getElementById('generalSearchTab');
         const ltcSearchTab = document.getElementById('ltcSearchTab');
-        const ltcMapContainer = document.getElementById('ltcMapContainer');
-        const ltcMapIframe = document.getElementById('ltcMapIframe');
         const mapContainer = document.getElementById('mapContainer');
-        const mapFrame = document.getElementById('mapFrame');
-        const searchButtonsContainer = document.getElementById('searchButtonsContainer');
-        const searchResultsBtn = document.getElementById('searchResultsBtn');
-        const directNavigationBtn = document.getElementById('directNavigationBtn');
+        const mapIframe = document.getElementById('mapIframe');
         
         let recognition = null;
         
-        // Initialize the app
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeApp();
-        });
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', initializeApp);
         
         function initializeApp() {
-            initializeSpeechRecognition();
-            
             // Set up event listeners
-            searchBtn.addEventListener('click', function() {
-                const query = searchInput.value.trim();
-                if (query) {
-                    performSearch(query);
+            searchInput.addEventListener('keyup', function(event) {
+                if (event.key === 'Enter') {
+                    const query = searchInput.value.trim();
+                    if (query) {
+                        redirectToGoogleMaps(query);
+                    }
                 }
             });
             
-            searchInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    const query = searchInput.value.trim();
-                    if (query) {
-                        performSearch(query);
-                    }
+            searchBtn.addEventListener('click', function() {
+                const query = searchInput.value.trim();
+                if (query) {
+                    redirectToGoogleMaps(query);
                 }
             });
             
             voiceSearchBtn.addEventListener('click', startVoiceRecognition);
             stopListeningBtn.addEventListener('click', stopVoiceRecognition);
+            
+            nearbyBtn.addEventListener('click', function() {
+                setActiveTab(this);
+                setActiveSearchTab('general');
+            });
+            
+            ltcResourcesBtn.addEventListener('click', function() {
+                setActiveTab(this);
+                openLtcResourcesPanel();
+            });
+            
+            historyBtn.addEventListener('click', function() {
+                setActiveTab(this);
+                openHistoryPanel();
+            });
+            
+            mapBtn.addEventListener('click', function() {
+                setActiveTab(this);
+                toggleMapVisibility();
+            });
+            
+            closeHistoryBtn.addEventListener('click', closeHistoryPanel);
+            closeLtcResourcesBtn.addEventListener('click', closeLtcResourcesPanel);
+            clearHistoryBtn.addEventListener('click', clearHistory);
             
             generalSearchTab.addEventListener('click', function() {
                 setActiveSearchTab('general');
@@ -405,62 +395,34 @@
                 setActiveSearchTab('ltc');
             });
             
-            // Navigation buttons
-            nearbyBtn.addEventListener('click', function() {
-                showNearbyPlaces();
-            });
-            
-            historyBtn.addEventListener('click', function() {
-                openHistoryPanel();
-            });
-            
-            mapBtn.addEventListener('click', function() {
-                toggleMapView();
-            });
-            
-            ltcResourcesBtn.addEventListener('click', function() {
-                openLtcResourcesPanel();
-            });
-            
-            // Panel close buttons
-            closeHistoryBtn.addEventListener('click', function() {
-                closeHistoryPanel();
-            });
-            
-            closeLtcResourcesBtn.addEventListener('click', function() {
-                closeLtcResourcesPanel();
-            });
-            
-            // Clear history button
-            clearHistoryBtn.addEventListener('click', function() {
-                clearHistory();
-            });
-            
-            // LTC category buttons
+            // Set up LTC category and service buttons
             document.querySelectorAll('.ltc-category-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
-                    const category = this.getAttribute('data-category');
-                    searchInput.value = category + '長照機構';
+                    const category = this.dataset.category;
                     closeLtcResourcesPanel();
-                    performSearch(category + '長照機構');
+                    redirectToLtcSearch(category);
                 });
             });
             
-            // LTC service buttons
             document.querySelectorAll('.ltc-service-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
-                    const service = this.getAttribute('data-service');
-                    searchInput.value = service;
+                    const service = this.dataset.service;
                     closeLtcResourcesPanel();
-                    performSearch(service);
+                    redirectToLtcSearch(service);
                 });
             });
             
-            // Set active search tab based on saved preference
+            // Set active search type from local storage or default
             setActiveSearchTab(currentSearchType);
             
-            // Get user location automatically upon page load
+            // Initialize speech recognition
+            initializeSpeechRecognition();
+            
+            // Get user location automatically on page load
             getUserLocation();
+            
+            // Display search history
+            updateHistoryList();
         }
         
         // Function to extract keywords from voice input
@@ -531,7 +493,8 @@
                         
                         setTimeout(() => {
                             voiceIndicator.classList.add('hidden');
-                            performSearch(processedTranscript);
+                            // Automatically redirect to Google Maps with the voice input
+                            redirectToGoogleMaps(processedTranscript);
                         }, 1000);
                     }
                 };
@@ -587,11 +550,8 @@
                         getAddressFromCoordinates(userLatitude, userLongitude);
                         hideStatus();
                         
-                        // Update map with user location
+                        // Update map iframe with user location
                         updateMapWithUserLocation();
-                        
-                        // Load LTC resources map after getting location
-                        loadLtcResourcesMap();
                     },
                     (error) => {
                         console.error('Geolocation error:', error);
@@ -602,11 +562,8 @@
                         userLatitude = 25.033964;
                         userLongitude = 121.564468;
                         
-                        // Update map with default location
+                        // Update map iframe with default location
                         updateMapWithUserLocation();
-                        
-                        // Load LTC resources map with default location
-                        loadLtcResourcesMap();
                         
                         setTimeout(() => {
                             hideStatus();
@@ -621,15 +578,30 @@
                 userLatitude = 25.033964;
                 userLongitude = 121.564468;
                 
-                // Update map with default location
+                // Update map iframe with default location
                 updateMapWithUserLocation();
-                
-                // Load LTC resources map with default location
-                loadLtcResourcesMap();
                 
                 setTimeout(() => {
                     hideStatus();
                 }, 3000);
+            }
+        }
+        
+        // Update map with user location
+        function updateMapWithUserLocation() {
+            if (userLatitude && userLongitude) {
+                const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${userLongitude - 0.01},${userLatitude - 0.01},${userLongitude + 0.01},${userLatitude + 0.01}&layer=mapnik&marker=${userLatitude},${userLongitude}`;
+                mapIframe.src = mapUrl;
+            }
+        }
+        
+        // Toggle map visibility
+        function toggleMapVisibility() {
+            if (mapContainer.classList.contains('hidden')) {
+                mapContainer.classList.remove('hidden');
+                updateMapWithUserLocation();
+            } else {
+                mapContainer.classList.add('hidden');
             }
         }
         
@@ -647,49 +619,163 @@
                 });
         }
         
-        // Update map with user location
-        function updateMapWithUserLocation() {
-            if (userLatitude && userLongitude) {
-                const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${userLongitude - 0.01},${userLatitude - 0.01},${userLongitude + 0.01},${userLatitude + 0.01}&layer=mapnik&marker=${userLatitude},${userLongitude}`;
-                mapFrame.src = mapUrl;
-            }
-        }
-        
-        // Toggle map view
-        function toggleMapView() {
-            if (mapContainer.classList.contains('hidden')) {
-                mapContainer.classList.remove('hidden');
-                updateMapWithUserLocation();
+        // Set active search tab
+        function setActiveSearchTab(type) {
+            if (type === 'general') {
+                generalSearchTab.classList.add('active');
+                ltcSearchTab.classList.remove('active');
+                searchInput.placeholder = '搜尋附近地點...';
             } else {
-                mapContainer.classList.add('hidden');
+                generalSearchTab.classList.remove('active');
+                ltcSearchTab.classList.add('active');
+                searchInput.placeholder = '搜尋附近長照資源...';
             }
+            
+            currentSearchType = type;
+            localStorage.setItem('defaultSearchType', type);
         }
         
-        // Load LTC resources map
-        function loadLtcResourcesMap() {
-            // Only load iframe when needed (to save resources and prevent tracking)
-            if (currentSearchType === 'ltc') {
-                // Load the iframe with user's location embedded on the map
-                const ltcMapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${userLongitude - 0.01},${userLatitude - 0.01},${userLongitude + 0.01},${userLatitude + 0.01}&layer=mapnik&marker=${userLatitude},${userLongitude}`;
-                ltcMapIframe.src = ltcMapUrl;
-                ltcMapContainer.classList.remove('hidden');
-            } else {
-                ltcMapContainer.classList.add('hidden');
+        // Add to search history
+        function addToHistory(query) {
+            // Remove the query if it already exists in history
+            searchHistory = searchHistory.filter(item => item.query !== query);
+            
+            // Add the new query at the beginning
+            searchHistory.unshift({
+                query: query,
+                timestamp: Date.now(),
+                type: currentSearchType
+            });
+            
+            // Keep only the latest 20 items
+            if (searchHistory.length > 20) {
+                searchHistory = searchHistory.slice(0, 20);
             }
+            
+            // Save to localStorage
+            localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+            
+            // Update the history list if panel is open
+            updateHistoryList();
         }
         
-        // Show nearby places
-        function showNearbyPlaces() {
-            if (!userLatitude || !userLongitude) {
-                showStatus('請先獲取位置', 'warning');
+        // Update history list
+        function updateHistoryList() {
+            historyList.innerHTML = '';
+            
+            if (searchHistory.length === 0) {
+                const emptyMessage = document.createElement('p');
+                emptyMessage.className = 'text-center text-gray-500 py-4';
+                emptyMessage.textContent = '沒有搜尋記錄';
+                historyList.appendChild(emptyMessage);
                 return;
             }
             
+            searchHistory.forEach((item, index) => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'bg-white p-3 rounded-lg shadow-sm flex items-center justify-between';
+                
+                const date = new Date(item.timestamp);
+                const dateString = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+                
+                historyItem.innerHTML = `
+                    <div>
+                        <p class="font-medium text-gray-800">${item.query}</p>
+                        <p class="text-xs text-gray-500">${dateString} · ${item.type === 'general' ? '一般搜尋' : '長照資源'}</p>
+                    </div>
+                    <button class="history-search-btn px-3 py-1 bg-blue-50 text-blue-500 rounded-lg text-sm" data-query="${item.query}" data-type="${item.type}">
+                        搜尋
+                    </button>
+                `;
+                
+                historyList.appendChild(historyItem);
+                
+                // Add event listener to the search button
+                const searchBtn = historyItem.querySelector('.history-search-btn');
+                searchBtn.addEventListener('click', function() {
+                    const query = this.dataset.query;
+                    const type = this.dataset.type;
+                    
+                    // Set the search type
+                    setActiveSearchTab(type);
+                    
+                    // Close the history panel
+                    closeHistoryPanel();
+                    
+                    // Redirect to Google Maps
+                    redirectToGoogleMaps(query);
+                });
+            });
+        }
+        
+        // Clear history
+        function clearHistory() {
+            searchHistory = [];
+            localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+            updateHistoryList();
+        }
+        
+        // Open history panel
+        function openHistoryPanel() {
+            historyPanel.classList.remove('translate-x-full');
+            updateHistoryList();
+        }
+        
+        // Close history panel
+        function closeHistoryPanel() {
+            historyPanel.classList.add('translate-x-full');
+        }
+        
+        // Open LTC resources panel
+        function openLtcResourcesPanel() {
+            ltcResourcesPanel.classList.remove('translate-x-full');
+        }
+        
+        // Close LTC resources panel
+        function closeLtcResourcesPanel() {
+            ltcResourcesPanel.classList.add('translate-x-full');
+        }
+        
+        // Redirect to LTC search
+        function redirectToLtcSearch(query) {
+            // Set search type to LTC
+            setActiveSearchTab('ltc');
+            
+            // Set search input value
+            searchInput.value = query;
+            
+            // Redirect to Google Maps with LTC query
+            redirectToGoogleMaps(query + ' 長照');
+        }
+        
+        // Redirect to Google Maps
+        function redirectToGoogleMaps(query) {
+            if (!query.trim()) return;
+            
+            // Add to search history
+            addToHistory(query);
+            
+            // Show loading indicator
+            loadingIndicator.classList.remove('hidden');
+            resultsContainer.innerHTML = '';
+            
+            // Create Google Maps URLs
+            let googleMapsUrl;
+            let directionsUrl;
+            
             if (currentSearchType === 'general') {
-                performSearch('附近景點');
+                googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${userLatitude},${userLongitude},15z`;
+                directionsUrl = `https://www.google.com/maps/dir/?api=1&origin=${userLatitude},${userLongitude}&destination=${encodeURIComponent(query)}&travelmode=driving`;
             } else {
-                performSearch('附近長照機構');
+                googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(query + ' 長照機構')}/@${userLatitude},${userLongitude},15z`;
+                directionsUrl = `https://www.google.com/maps/dir/?api=1&origin=${userLatitude},${userLongitude}&destination=${encodeURIComponent(query + ' 長照機構')}&travelmode=driving`;
             }
+            
+            // Hide loading indicator
+            loadingIndicator.classList.add('hidden');
+            
+            // Open Google Maps in a new tab
+            window.open(googleMapsUrl, '_blank');
         }
         
         // Show status bar with message
@@ -716,133 +802,17 @@
             statusBar.classList.add('hidden');
         }
         
-        // Set active search tab
-        function setActiveSearchTab(type) {
-            if (type === 'general') {
-                generalSearchTab.classList.add('active');
-                ltcSearchTab.classList.remove('active');
-                searchInput.placeholder = '搜尋附近地點...';
-                ltcMapContainer.classList.add('hidden');
-            } else {
-                generalSearchTab.classList.remove('active');
-                ltcSearchTab.classList.add('active');
-                searchInput.placeholder = '搜尋附近長照資源...';
-                loadLtcResourcesMap();
-            }
-            
-            currentSearchType = type;
-            localStorage.setItem('defaultSearchType', type);
-        }
-        
-        // Add to search history
-        function addToHistory(query) {
-            // Don't add duplicates
-            if (!searchHistory.includes(query)) {
-                searchHistory.unshift(query);
-                
-                // Keep only the latest 20 searches
-                if (searchHistory.length > 20) {
-                    searchHistory.pop();
-                }
-                
-                // Save to localStorage
-                localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
-                
-                // Update history display if panel is open
-                if (!historyPanel.classList.contains('translate-x-full')) {
-                    updateHistoryDisplay();
-                }
-            }
-        }
-        
-        // Open history panel
-        function openHistoryPanel() {
-            historyPanel.classList.remove('translate-x-full');
-            updateHistoryDisplay();
-        }
-        
-        // Close history panel
-        function closeHistoryPanel() {
-            historyPanel.classList.add('translate-x-full');
-        }
-        
-        // Open LTC resources panel
-        function openLtcResourcesPanel() {
-            ltcResourcesPanel.classList.remove('translate-x-full');
-        }
-        
-        // Close LTC resources panel
-        function closeLtcResourcesPanel() {
-            ltcResourcesPanel.classList.add('translate-x-full');
-        }
-        
-        // Update history display
-        function updateHistoryDisplay() {
-            historyList.innerHTML = '';
-            
-            if (searchHistory.length === 0) {
-                const emptyMsg = document.createElement('div');
-                emptyMsg.className = 'text-center text-gray-500 py-5';
-                emptyMsg.textContent = '暫無搜尋記錄';
-                historyList.appendChild(emptyMsg);
-                return;
-            }
-            
-            searchHistory.forEach(query => {
-                const historyItem = document.createElement('div');
-                historyItem.className = 'bg-white shadow-sm rounded-lg p-3 flex justify-between items-center';
-                
-                historyItem.innerHTML = `
-                    <div class="flex items-center">
-                        <i class="fas fa-history text-gray-400 mr-3"></i>
-                        <span class="text-gray-800">${query}</span>
-                    </div>
-                    <button class="history-search-btn text-blue-500 p-2 hover:bg-blue-50 rounded-full">
-                        <i class="fas fa-search"></i>
-                    </button>
-                `;
-                
-                const searchAgainBtn = historyItem.querySelector('.history-search-btn');
-                searchAgainBtn.addEventListener('click', () => {
-                    searchInput.value = query;
-                    closeHistoryPanel();
-                    performSearch(query);
-                });
-                
-                historyList.appendChild(historyItem);
+        // Set active tab
+        function setActiveTab(tab) {
+            // Remove active class from all tabs
+            document.querySelectorAll('nav button').forEach(btn => {
+                btn.classList.remove('text-blue-500');
+                btn.classList.add('text-gray-500');
             });
-        }
-        
-        // Clear history
-        function clearHistory() {
-            searchHistory = [];
-            localStorage.removeItem('searchHistory');
-            updateHistoryDisplay();
-        }
-        
-        // Perform search
-        function performSearch(query) {
-            if (!query.trim()) return;
             
-            // Show loading indicator
-            loadingIndicator.classList.remove('hidden');
-            searchButtonsContainer.classList.add('hidden');
-            
-            // Add to search history
-            addToHistory(query);
-            
-            // Create URLs for Google Maps search and directions
-            const googleMapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${userLatitude},${userLongitude},15z`;
-            const directionsUrl = `https://www.google.com/maps/dir/?api=1&origin=${userLatitude},${userLongitude}&destination=${encodeURIComponent(query)}&travelmode=driving`;
-            
-            // Update the search and navigation buttons
-            searchResultsBtn.href = googleMapsUrl;
-            directNavigationBtn.href = directionsUrl;
-            
-            setTimeout(() => {
-                loadingIndicator.classList.add('hidden');
-                searchButtonsContainer.classList.remove('hidden');
-            }, 1000);
+            // Add active class to the clicked tab
+            tab.classList.remove('text-gray-500');
+            tab.classList.add('text-blue-500');
         }
     </script>
 </body>
