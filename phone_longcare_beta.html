@@ -107,41 +107,42 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
+        /* Weather information styles */
         .weather-container {
-            background-color: rgba(255, 255, 255, 0.9);
+            background-color: white;
             border-radius: 12px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-            padding: 10px;
+            padding: 12px;
+            margin-top: 10px;
             margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .weather-icon {
+            font-size: 2rem;
+            margin-right: 12px;
+            width: 50px;
+            height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
-        .weather-icon {
-            font-size: 28px;
-            margin-right: 10px;
+        .weather-details {
+            flex: 1;
         }
         
-        .weather-temp {
-            font-size: 24px;
+        .temperature {
+            font-size: 1.2rem;
             font-weight: bold;
+            margin-bottom: 4px;
         }
         
-        .weather-desc {
-            font-size: 14px;
+        .weather-condition {
             color: #666;
-        }
-        
-        .weather-loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(59, 130, 246, 0.3);
-            border-radius: 50%;
-            border-top-color: #3b82f6;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 10px;
+            font-size: 0.9rem;
         }
     </style>
 </head>
@@ -159,23 +160,23 @@
     <!-- Main Content -->
     <main class="flex-1 mt-14 mb-16 overflow-auto p-4">
         <!-- Location Information -->
-        <div id="locationInfo" class="mb-3 text-center text-gray-600 text-sm flex items-center justify-center">
+        <div id="locationInfo" class="mb-2 text-center text-gray-600 text-sm flex items-center justify-center">
             <div class="location-dot bg-blue-500 h-3 w-3 rounded-full mr-2"></div>
             <span id="locationText">獲取位置中...</span>
         </div>
         
-        <!-- Weather Information -->
-        <div id="weatherContainer" class="weather-container hidden">
-            <div id="weatherLoading" class="weather-loading"></div>
-            <div id="weatherContent" class="flex items-center justify-center">
+        <!-- Weather Information (initially hidden) -->
+        <div id="weatherContainer" class="weather-container mb-4 hidden">
+            <div class="flex items-center">
                 <div id="weatherIcon" class="weather-icon text-blue-500">
-                    <i class="fas fa-cloud-sun"></i>
+                    <!-- Weather icon will be inserted here by JS -->
                 </div>
-                <div class="flex flex-col">
-                    <div id="weatherTemp" class="weather-temp">--°C</div>
-                    <div id="weatherDesc" class="weather-desc">獲取天氣中...</div>
+                <div class="weather-details">
+                    <div id="temperature" class="temperature">-- °C</div>
+                    <div id="weatherCondition" class="weather-condition">獲取天氣資訊中...</div>
                 </div>
             </div>
+            <div class="text-xs text-gray-400" id="weatherUpdateTime"></div>
         </div>
 
         <!-- Search Type Tabs -->
@@ -387,17 +388,14 @@
         const ltcSearchTab = document.getElementById('ltcSearchTab');
         const mapContainer = document.getElementById('mapContainer');
         const mapIframe = document.getElementById('mapIframe');
+        // Weather elements
         const weatherContainer = document.getElementById('weatherContainer');
-        const weatherLoading = document.getElementById('weatherLoading');
-        const weatherContent = document.getElementById('weatherContent');
         const weatherIcon = document.getElementById('weatherIcon');
-        const weatherTemp = document.getElementById('weatherTemp');
-        const weatherDesc = document.getElementById('weatherDesc');
+        const temperature = document.getElementById('temperature');
+        const weatherCondition = document.getElementById('weatherCondition');
+        const weatherUpdateTime = document.getElementById('weatherUpdateTime');
         
         let recognition = null;
-        
-        // Weather API Key (OpenWeatherMap free tier)
-        const WEATHER_API_KEY = "9490300c0abcab88395c1372f1472abe"; // Public API key for demonstration
         
         // Initialize the application
         document.addEventListener('DOMContentLoaded', initializeApp);
@@ -608,10 +606,11 @@
                         
                         // Get address from coordinates
                         getAddressFromCoordinates(userLatitude, userLongitude);
-                        hideStatus();
                         
-                        // Get weather data
-                        getWeatherData(userLatitude, userLongitude);
+                        // Get weather information from coordinates
+                        getCWAWeatherData(userLatitude, userLongitude);
+                        
+                        hideStatus();
                         
                         // Update map iframe with user location
                         updateMapWithUserLocation();
@@ -624,9 +623,6 @@
                         // Set default location (Taipei 101)
                         userLatitude = 25.033964;
                         userLongitude = 121.564468;
-                        
-                        // Get weather for default location
-                        getWeatherData(userLatitude, userLongitude);
                         
                         // Update map iframe with default location
                         updateMapWithUserLocation();
@@ -644,9 +640,6 @@
                 userLatitude = 25.033964;
                 userLongitude = 121.564468;
                 
-                // Get weather for default location
-                getWeatherData(userLatitude, userLongitude);
-                
                 // Update map iframe with default location
                 updateMapWithUserLocation();
                 
@@ -655,116 +648,185 @@
                 }, 3000);
             }
         }
-        
-        // Get weather data from OpenWeatherMap API
-        function getWeatherData(lat, lon) {
-            // Show weather container with loading state
-            weatherContainer.classList.remove('hidden');
-            weatherLoading.classList.remove('hidden');
-            weatherContent.classList.add('hidden');
-            
-            // Fetch weather data
-            fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&lang=zh_tw&appid=${WEATHER_API_KEY}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Weather data not available');
+        // Get weather data from Taiwan Central Weather Administration API
+        async function getCWAWeatherData(lat, lon) {
+            try {
+                // 由於中央氣象署API有授權限制，這裡使用最接近的觀測站資料
+                // 實際使用時應申請CWA API授權碼: https://opendata.cwb.gov.tw/index
+                
+                // 使用氣象資料開放平台API取得鄉鎮天氣預報資料
+                // 這裡我們用一個公開測試金鑰，實際應用請使用您申請的金鑰
+                const apiKey = 'CWB-D928B9D1-FEAA-4128-8C27-60109B95A22A';
+                
+                // 找到最近的縣市並獲取該地區的天氣預報
+                // 使用經緯度計算出最近的行政區
+                const nearestArea = await getNearestTownship(lat, lon);
+                
+                if (nearestArea) {
+                    // 使用最近縣市的代碼獲取該地區的天氣資料
+                    const weatherUrl = `https://opendata.cwb.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=${apiKey}&locationName=${encodeURIComponent(nearestArea.city)}`;
+                    
+                    // 在實際應用中，這個請求應該在伺服器端執行以避免CORS問題
+                    const response = await fetch(weatherUrl);
+                    const data = await response.json();
+                    
+                    if (data.success === "true" && data.records && data.records.location) {
+                        // 找到對應的城市天氣資料
+                        const cityWeather = data.records.location.find(loc => 
+                            loc.locationName === nearestArea.city
+                        );
+                        
+                        if (cityWeather) {
+                            updateWeatherDisplay(cityWeather, nearestArea);
+                        } else {
+                            throw new Error("找不到該城市的天氣資料");
+                        }
+                    } else {
+                        throw new Error("無法獲取天氣資料");
                     }
-                    return response.json();
-                })
-                .then(data => {
-                    // Update weather information
-                    updateWeatherUI(data);
-                })
-                .catch(error => {
-                    console.error('Error fetching weather:', error);
-                    weatherContainer.classList.add('hidden');
-                });
+                } else {
+                    throw new Error("無法確定您的位置對應的行政區");
+                }
+            } catch (error) {
+                console.error('天氣資料獲取錯誤:', error);
+                weatherContainer.classList.add('hidden');
+                
+                // 顯示錯誤訊息，但不影響應用程式的其他功能
+                showStatus('無法獲取天氣資料，請稍後再試', 'warning');
+                setTimeout(() => {
+                    hideStatus();
+                }, 3000);
+            }
         }
         
-        // Update weather UI with data
-        function updateWeatherUI(data) {
-            // Hide loading indicator
-            weatherLoading.classList.add('hidden');
-            weatherContent.classList.remove('hidden');
+        // 獲取最接近的台灣行政區
+        async function getNearestTownship(lat, lon) {
+            // 台灣主要縣市座標簡易對照表（實際應用應使用更詳細的地理資訊）
+            const cities = [
+                {city: "臺北市", lat: 25.033, lon: 121.565},
+                {city: "新北市", lat: 25.016, lon: 121.463},
+                {city: "桃園市", lat: 24.993, lon: 121.301},
+                {city: "臺中市", lat: 24.149, lon: 120.674},
+                {city: "臺南市", lat: 22.997, lon: 120.187},
+                {city: "高雄市", lat: 22.628, lon: 120.301},
+                {city: "基隆市", lat: 25.128, lon: 121.739},
+                {city: "新竹縣", lat: 24.839, lon: 121.002},
+                {city: "新竹市", lat: 24.802, lon: 120.972},
+                {city: "苗栗縣", lat: 24.561, lon: 120.822},
+                {city: "彰化縣", lat: 24.075, lon: 120.544},
+                {city: "南投縣", lat: 23.911, lon: 120.687},
+                {city: "雲林縣", lat: 23.699, lon: 120.527},
+                {city: "嘉義縣", lat: 23.452, lon: 120.257},
+                {city: "嘉義市", lat: 23.480, lon: 120.449},
+                {city: "屏東縣", lat: 22.552, lon: 120.549},
+                {city: "宜蘭縣", lat: 24.751, lon: 121.758},
+                {city: "花蓮縣", lat: 23.987, lon: 121.602},
+                {city: "臺東縣", lat: 22.755, lon: 121.151},
+                {city: "澎湖縣", lat: 23.571, lon: 119.580},
+                {city: "金門縣", lat: 24.449, lon: 118.377},
+                {city: "連江縣", lat: 26.160, lon: 119.950}
+            ];
             
-            // Update temperature
-            const temp = Math.round(data.main.temp);
-            weatherTemp.textContent = `${temp}°C`;
+            // 計算距離並找出最近的城市
+            let nearestCity = null;
+            let minDistance = Infinity;
             
-            // Update description
-            weatherDesc.textContent = data.weather[0].description;
+            cities.forEach(city => {
+                const distance = getDistance(lat, lon, city.lat, city.lon);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestCity = city;
+                }
+            });
             
-            // Update icon based on weather condition
-            const weatherCode = data.weather[0].id;
-            const iconClass = getWeatherIconClass(weatherCode);
-            weatherIcon.innerHTML = `<i class="${iconClass}"></i>`;
-            
-            // Set icon color based on weather condition
-            setWeatherIconColor(weatherCode);
+            return nearestCity;
         }
         
-        // Get Font Awesome icon class based on OpenWeatherMap weather code
-        function getWeatherIconClass(code) {
-            // Rain
-            if (code >= 200 && code < 300) {
-                return 'fas fa-bolt';
-            }
-            // Drizzle
-            if (code >= 300 && code < 400) {
-                return 'fas fa-cloud-rain';
-            }
-            // Rain
-            if (code >= 500 && code < 600) {
-                return 'fas fa-umbrella';
-            }
-            // Snow
-            if (code >= 600 && code < 700) {
-                return 'fas fa-snowflake';
-            }
-            // Atmosphere (fog, mist, etc)
-            if (code >= 700 && code < 800) {
-                return 'fas fa-smog';
-            }
-            // Clear
-            if (code === 800) {
-                return 'fas fa-sun';
-            }
-            // Clouds
-            if (code > 800 && code < 900) {
-                return 'fas fa-cloud';
-            }
-            
-            return 'fas fa-cloud-sun'; // Default icon
+        // 計算兩點間距離的簡易方法（哈弗辛公式）
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // 地球半徑，單位公里
+            const dLat = deg2rad(lat2 - lat1);
+            const dLon = deg2rad(lon2 - lon1);
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+            const distance = R * c;
+            return distance;
         }
         
-        // Set weather icon color based on weather condition
-        function setWeatherIconColor(code) {
-            // Thunderstorm
-            if (code >= 200 && code < 300) {
-                weatherIcon.className = 'weather-icon text-yellow-500';
+        function deg2rad(deg) {
+            return deg * (Math.PI/180);
+        }
+        
+        // Update weather display with CWA data
+        function updateWeatherDisplay(cityWeather, nearestArea) {
+            if (!cityWeather || !cityWeather.weatherElement) {
+                console.error('Invalid weather data format');
+                return;
             }
-            // Drizzle or Rain
-            else if ((code >= 300 && code < 400) || (code >= 500 && code < 600)) {
-                weatherIcon.className = 'weather-icon text-blue-500';
+            
+            try {
+                // 從氣象署資料中提取所需資訊
+                const weatherElements = cityWeather.weatherElement;
+                
+                // 獲取氣象狀況描述 (Wx)
+                const wxElement = weatherElements.find(item => item.elementName === 'Wx');
+                const weatherDesc = wxElement.time[0].parameter.parameterName;
+                
+                // 獲取溫度範圍 (MinT and MaxT)
+                const minTElement = weatherElements.find(item => item.elementName === 'MinT');
+                const maxTElement = weatherElements.find(item => item.elementName === 'MaxT');
+                const minTemp = minTElement.time[0].parameter.parameterName;
+                const maxTemp = maxTElement.time[0].parameter.parameterName;
+                
+                // 獲取降雨機率 (PoP)
+                const popElement = weatherElements.find(item => item.elementName === 'PoP');
+                const rainProb = popElement.time[0].parameter.parameterName;
+                
+                // 更新 UI
+                temperature.textContent = `${minTemp}~${maxTemp} °C`;
+                weatherCondition.textContent = `${weatherDesc} | 降雨機率: ${rainProb}%`;
+                
+                // 設置天氣圖示
+                weatherIcon.innerHTML = getWeatherIconFromDesc(weatherDesc);
+                
+                // 更新時間戳記
+                const now = new Date();
+                weatherUpdateTime.textContent = `更新於 ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')} | ${nearestArea.city}`;
+                
+                // 顯示天氣容器
+                weatherContainer.classList.remove('hidden');
+            } catch (error) {
+                console.error('天氣資料解析錯誤:', error);
+                weatherContainer.classList.add('hidden');
             }
-            // Snow
-            else if (code >= 600 && code < 700) {
-                weatherIcon.className = 'weather-icon text-blue-200';
-            }
-            // Atmosphere (fog, mist, etc)
-            else if (code >= 700 && code < 800) {
-                weatherIcon.className = 'weather-icon text-gray-500';
-            }
-            // Clear
-            else if (code === 800) {
-                weatherIcon.className = 'weather-icon text-yellow-500';
-            }
-            // Clouds
-            else if (code > 800 && code < 900) {
-                weatherIcon.className = 'weather-icon text-gray-400';
-            }
-            else {
-                weatherIcon.className = 'weather-icon text-blue-500'; // Default color
+        }
+        
+        // 根據天氣描述獲取適當的圖示
+        function getWeatherIconFromDesc(description) {
+            // 依據常見的天氣描述詞彙對應到 Font Awesome 圖示
+            if (description.includes('雨')) {
+                if (description.includes('雷')) {
+                    return '<i class="fas fa-bolt text-yellow-500"></i>'; // 雷雨
+                } else if (description.includes('小')) {
+                    return '<i class="fas fa-cloud-rain text-blue-400"></i>'; // 小雨
+                } else {
+                    return '<i class="fas fa-cloud-showers-heavy text-blue-500"></i>'; // 大雨
+                }
+            } else if (description.includes('雪')) {
+                return '<i class="fas fa-snowflake text-blue-200"></i>'; // 雪
+            } else if (description.includes('霧') || description.includes('霾')) {
+                return '<i class="fas fa-smog text-gray-400"></i>'; // 霧
+            } else if (description.includes('陰')) {
+                return '<i class="fas fa-cloud text-gray-500"></i>'; // 陰天
+            } else if (description.includes('多雲')) {
+                return '<i class="fas fa-cloud-sun text-gray-400"></i>'; // 多雲
+            } else if (description.includes('晴')) {
+                return '<i class="fas fa-sun text-yellow-500"></i>'; // 晴天
+            } else {
+                return '<i class="fas fa-cloud text-gray-500"></i>'; // 預設為多雲
             }
         }
         
