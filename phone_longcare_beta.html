@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>國衛院 AI語音地圖資源與長照地圖 V5.0 Beta</title>
+    <title>國衛院 AI語音地圖資源與長照地圖 V4.30</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <style>
@@ -107,42 +107,41 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
-        /* Weather information styles */
         .weather-container {
-            background-color: white;
+            background-color: rgba(255, 255, 255, 0.9);
             border-radius: 12px;
-            padding: 12px;
-            margin-top: 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            padding: 10px;
             margin-bottom: 16px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        
-        .weather-icon {
-            font-size: 2rem;
-            margin-right: 12px;
-            width: 50px;
-            height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
-        .weather-details {
-            flex: 1;
+        .weather-icon {
+            font-size: 28px;
+            margin-right: 10px;
         }
         
-        .temperature {
-            font-size: 1.2rem;
+        .weather-temp {
+            font-size: 24px;
             font-weight: bold;
-            margin-bottom: 4px;
         }
         
-        .weather-condition {
+        .weather-desc {
+            font-size: 14px;
             color: #666;
-            font-size: 0.9rem;
+        }
+        
+        .weather-loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
         }
     </style>
 </head>
@@ -154,29 +153,29 @@
 
     <!-- Header -->
     <header class="bg-white text-center p-3 shadow-sm fixed top-0 left-0 right-0 z-10">
-        <h1 class="text-xl font-bold text-gray-800">國衛院 AI語音地圖資源與長照地圖 V5.0 Beta</h1>
+        <h1 class="text-xl font-bold text-gray-800">國衛院 AI語音地圖資源與長照地圖 V4.30</h1>
     </header>
 
     <!-- Main Content -->
     <main class="flex-1 mt-14 mb-16 overflow-auto p-4">
         <!-- Location Information -->
-        <div id="locationInfo" class="mb-2 text-center text-gray-600 text-sm flex items-center justify-center">
+        <div id="locationInfo" class="mb-3 text-center text-gray-600 text-sm flex items-center justify-center">
             <div class="location-dot bg-blue-500 h-3 w-3 rounded-full mr-2"></div>
             <span id="locationText">獲取位置中...</span>
         </div>
         
-        <!-- Weather Information (initially hidden) -->
-        <div id="weatherContainer" class="weather-container mb-4 hidden">
-            <div class="flex items-center">
+        <!-- Weather Information -->
+        <div id="weatherContainer" class="weather-container hidden">
+            <div id="weatherLoading" class="weather-loading"></div>
+            <div id="weatherContent" class="flex items-center justify-center">
                 <div id="weatherIcon" class="weather-icon text-blue-500">
-                    <!-- Weather icon will be inserted here by JS -->
+                    <i class="fas fa-cloud-sun"></i>
                 </div>
-                <div class="weather-details">
-                    <div id="temperature" class="temperature">-- °C</div>
-                    <div id="weatherCondition" class="weather-condition">獲取天氣資訊中...</div>
+                <div class="flex flex-col">
+                    <div id="weatherTemp" class="weather-temp">--°C</div>
+                    <div id="weatherDesc" class="weather-desc">獲取天氣中...</div>
                 </div>
             </div>
-            <div class="text-xs text-gray-400" id="weatherUpdateTime"></div>
         </div>
 
         <!-- Search Type Tabs -->
@@ -388,14 +387,17 @@
         const ltcSearchTab = document.getElementById('ltcSearchTab');
         const mapContainer = document.getElementById('mapContainer');
         const mapIframe = document.getElementById('mapIframe');
-        // Weather elements
         const weatherContainer = document.getElementById('weatherContainer');
+        const weatherLoading = document.getElementById('weatherLoading');
+        const weatherContent = document.getElementById('weatherContent');
         const weatherIcon = document.getElementById('weatherIcon');
-        const temperature = document.getElementById('temperature');
-        const weatherCondition = document.getElementById('weatherCondition');
-        const weatherUpdateTime = document.getElementById('weatherUpdateTime');
+        const weatherTemp = document.getElementById('weatherTemp');
+        const weatherDesc = document.getElementById('weatherDesc');
         
         let recognition = null;
+        
+        // Weather API Key (OpenWeatherMap free tier)
+        const WEATHER_API_KEY = "9490300c0abcab88395c1372f1472abe"; // Public API key for demonstration
         
         // Initialize the application
         document.addEventListener('DOMContentLoaded', initializeApp);
@@ -606,11 +608,10 @@
                         
                         // Get address from coordinates
                         getAddressFromCoordinates(userLatitude, userLongitude);
-                        
-                        // Get weather information from coordinates
-                        getWeatherData(userLatitude, userLongitude);
-                        
                         hideStatus();
+                        
+                        // Get weather data
+                        getWeatherData(userLatitude, userLongitude);
                         
                         // Update map iframe with user location
                         updateMapWithUserLocation();
@@ -655,83 +656,115 @@
             }
         }
         
-        // Get weather data from latitude and longitude
+        // Get weather data from OpenWeatherMap API
         function getWeatherData(lat, lon) {
-            // Use OpenWeatherMap API (Free tier)
-            // Note: In a production app, you should use your own API key and secure it properly
-            const apiKey = 'ba345615c38eb8c44429561088690cdc'; // Free tier API key (limited usage)
-            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=zh_tw`;
+            // Show weather container with loading state
+            weatherContainer.classList.remove('hidden');
+            weatherLoading.classList.remove('hidden');
+            weatherContent.classList.add('hidden');
             
-            fetch(url)
-                .then(response => response.json())
+            // Fetch weather data
+            fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&lang=zh_tw&appid=${WEATHER_API_KEY}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Weather data not available');
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    updateWeatherDisplay(data);
+                    // Update weather information
+                    updateWeatherUI(data);
                 })
                 .catch(error => {
-                    console.error('Weather data fetch error:', error);
+                    console.error('Error fetching weather:', error);
                     weatherContainer.classList.add('hidden');
                 });
         }
-        讓我接續提供完整代碼的剩餘部分：
-
-Copy        // Update weather display with data
-        function updateWeatherDisplay(data) {
-            if (!data || !data.main) {
-                console.error('Invalid weather data received');
-                return;
-            }
+        
+        // Update weather UI with data
+        function updateWeatherUI(data) {
+            // Hide loading indicator
+            weatherLoading.classList.add('hidden');
+            weatherContent.classList.remove('hidden');
             
             // Update temperature
-            temperature.textContent = `${Math.round(data.main.temp)} °C`;
+            const temp = Math.round(data.main.temp);
+            weatherTemp.textContent = `${temp}°C`;
             
-            // Update weather condition
-            weatherCondition.textContent = data.weather[0].description;
+            // Update description
+            weatherDesc.textContent = data.weather[0].description;
             
-            // Update weather icon based on weather code
+            // Update icon based on weather condition
             const weatherCode = data.weather[0].id;
-            const isDay = isItDayTime(data.sys.sunrise, data.sys.sunset);
+            const iconClass = getWeatherIconClass(weatherCode);
+            weatherIcon.innerHTML = `<i class="${iconClass}"></i>`;
             
-            // Set weather icon based on condition code
-            weatherIcon.innerHTML = getWeatherIcon(weatherCode, isDay);
-            
-            // Update timestamp
-            const now = new Date();
-            weatherUpdateTime.textContent = `更新於 ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
-            
-            // Show weather container
-            weatherContainer.classList.remove('hidden');
+            // Set icon color based on weather condition
+            setWeatherIconColor(weatherCode);
         }
         
-        // Determine if it's daytime based on sunrise and sunset timestamps
-        function isItDayTime(sunrise, sunset) {
-            const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
-            return currentTime >= sunrise && currentTime < sunset;
-        }
-        
-        // Get appropriate weather icon based on weather code and day/night
-        function getWeatherIcon(code, isDay) {
-            // Weather icons mapping using Font Awesome icons
-            // Based on OpenWeatherMap weather condition codes: https://openweathermap.org/weather-conditions
+        // Get Font Awesome icon class based on OpenWeatherMap weather code
+        function getWeatherIconClass(code) {
+            // Rain
             if (code >= 200 && code < 300) {
-                return '<i class="fas fa-bolt text-yellow-500"></i>'; // Thunderstorm
-            } else if (code >= 300 && code < 500) {
-                return '<i class="fas fa-cloud-rain text-blue-300"></i>'; // Drizzle
-            } else if (code >= 500 && code < 600) {
-                return '<i class="fas fa-cloud-showers-heavy text-blue-500"></i>'; // Rain
-            } else if (code >= 600 && code < 700) {
-                return '<i class="fas fa-snowflake text-blue-200"></i>'; // Snow
-            } else if (code >= 700 && code < 800) {
-                return '<i class="fas fa-smog text-gray-400"></i>'; // Atmosphere (fog, mist, etc.)
-            } else if (code === 800) {
-                return isDay 
-                    ? '<i class="fas fa-sun text-yellow-500"></i>' // Clear day
-                    : '<i class="fas fa-moon text-blue-300"></i>'; // Clear night
-            } else if (code === 801) {
-                return isDay 
-                    ? '<i class="fas fa-cloud-sun text-gray-500"></i>' // Few clouds day
-                    : '<i class="fas fa-cloud-moon text-gray-500"></i>'; // Few clouds night
-            } else {
-                return '<i class="fas fa-cloud text-gray-500"></i>'; // Clouds
+                return 'fas fa-bolt';
+            }
+            // Drizzle
+            if (code >= 300 && code < 400) {
+                return 'fas fa-cloud-rain';
+            }
+            // Rain
+            if (code >= 500 && code < 600) {
+                return 'fas fa-umbrella';
+            }
+            // Snow
+            if (code >= 600 && code < 700) {
+                return 'fas fa-snowflake';
+            }
+            // Atmosphere (fog, mist, etc)
+            if (code >= 700 && code < 800) {
+                return 'fas fa-smog';
+            }
+            // Clear
+            if (code === 800) {
+                return 'fas fa-sun';
+            }
+            // Clouds
+            if (code > 800 && code < 900) {
+                return 'fas fa-cloud';
+            }
+            
+            return 'fas fa-cloud-sun'; // Default icon
+        }
+        
+        // Set weather icon color based on weather condition
+        function setWeatherIconColor(code) {
+            // Thunderstorm
+            if (code >= 200 && code < 300) {
+                weatherIcon.className = 'weather-icon text-yellow-500';
+            }
+            // Drizzle or Rain
+            else if ((code >= 300 && code < 400) || (code >= 500 && code < 600)) {
+                weatherIcon.className = 'weather-icon text-blue-500';
+            }
+            // Snow
+            else if (code >= 600 && code < 700) {
+                weatherIcon.className = 'weather-icon text-blue-200';
+            }
+            // Atmosphere (fog, mist, etc)
+            else if (code >= 700 && code < 800) {
+                weatherIcon.className = 'weather-icon text-gray-500';
+            }
+            // Clear
+            else if (code === 800) {
+                weatherIcon.className = 'weather-icon text-yellow-500';
+            }
+            // Clouds
+            else if (code > 800 && code < 900) {
+                weatherIcon.className = 'weather-icon text-gray-400';
+            }
+            else {
+                weatherIcon.className = 'weather-icon text-blue-500'; // Default color
             }
         }
         
