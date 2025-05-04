@@ -184,6 +184,42 @@
             color: #999;
             margin-top: 8px;
         }
+
+/* 新增天氣動畫效果 */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    25% { transform: translateY(-3px) translateX(3px); }
+    50% { transform: translateY(0) translateX(5px); }
+    75% { transform: translateY(3px) translateX(3px); }
+}
+
+@keyframes sway {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+}
+
+@keyframes flash {
+    0%, 50%, 100% { opacity: 1; }
+    25%, 75% { opacity: 0.3; }
+}
+
+
+        
     </style>
 </head>
 <body class="h-screen flex flex-col">
@@ -1004,6 +1040,32 @@
             tempMin = Math.round(Math.max(5, Math.min(30, tempMin)));
             tempMax = Math.round(Math.max(tempMin + 1, Math.min(38, tempMax)));
             rainProb = Math.max(0, Math.min(100, Math.floor(rainProb)));
+
+
+    if (rainProb > 60) {
+        if (condition.includes('雷')) {
+            condition = '午後雷陣雨';
+            icon = '<i class="fas fa-bolt text-yellow-500" style="animation: flash 2s infinite"></i>';
+        } else {
+            condition = '多雲時陣雨';
+            icon = '<i class="fas fa-cloud-showers-heavy text-blue-500" style="animation: bounce 2s infinite"></i>';
+        }
+    } else if (rainProb > 30) {
+        condition = '多雲短暫雨';
+        icon = '<i class="fas fa-cloud-sun-rain text-blue-300" style="animation: sway 3s infinite ease-in-out"></i>';
+    } else if (condition.includes('陰')) {
+        condition = '陰天';
+        icon = '<i class="fas fa-cloud text-gray-500" style="animation: float 4s infinite ease-in-out"></i>';
+    } else if (condition.includes('多雲')) {
+        condition = '多雲';
+        icon = '<i class="fas fa-cloud-sun text-gray-400" style="animation: pulse 3s infinite"></i>';
+    } else {
+        condition = '晴朗';
+        icon = '<i class="fas fa-sun text-yellow-500" style="animation: spin 8s linear infinite"></i>';
+    }
+
+
+
             
             return {
                 tempMin,
