@@ -555,24 +555,7 @@
             }, 2000);
         });
         
-        // 新增清除瀏覽器本頁快取的函數
-        function clearBrowserCache() {
-            // 方法1: 使用 Cache API (如果瀏覽器支援)
-            if ('caches' in window) {
-                // 取得當前頁面URL
-                const currentPageUrl = window.location.href;
-                
-                // 嘗試刪除當前頁面的快取
-                caches.keys().then(cacheNames => {
-                    return Promise.all(
-                        cacheNames.map(cacheName => {
-                            return caches.open(cacheName).then(cache => {
-                                return cache.delete(currentPageUrl);
-                            });
-                        })
-                    );
-                });
-            }
+
         
 
 
