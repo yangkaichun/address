@@ -382,7 +382,7 @@
                         <i class="fas fa-home text-blue-500 mr-2"></i>
                         <span>居家式長照機構</span>
                     </button>
-                    <button class="ltc-category-btn bg-white border border-gray-200 rounded-lg p-3 flex items-center" data-category="社區式, 伯公照護站">
+                    <button class="ltc-category-btn bg-white border border-gray-200 rounded-lg p-3 flex items-center" data-category="社區式">
                         <i class="fas fa-users text-green-500 mr-2"></i>
                         <span>社區式長照機構</span>
                     </button>
@@ -530,10 +530,13 @@
             voiceSearchBtn.addEventListener('click', startVoiceRecognition);
             stopListeningBtn.addEventListener('click', stopVoiceRecognition);
             
-               // 修改探索按鈕的點擊事件處理
+         // 修改探索按鈕的點擊事件處理
         nearbyBtn.addEventListener('click', function() {
             setActiveTab(this);
             setActiveSearchTab('general');
+            
+            // 清除瀏覽器本頁的快取
+            clearBrowserCache();
             
             // 重新開啟取得GPS與麥克風權限
             getUserLocation();
@@ -552,6 +555,41 @@
             }, 2000);
         });
         
+        // 新增清除瀏覽器本頁快取的函數
+        function clearBrowserCache() {
+            // 方法1: 使用 Cache API (如果瀏覽器支援)
+            if ('caches' in window) {
+                // 取得當前頁面URL
+                const currentPageUrl = window.location.href;
+                
+                // 嘗試刪除當前頁面的快取
+                caches.keys().then(cacheNames => {
+                    return Promise.all(
+                        cacheNames.map(cacheName => {
+                            return caches.open(cacheName).then(cache => {
+                                return cache.delete(currentPageUrl);
+                            });
+                        })
+                    );
+                });
+            }
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             
             ltcResourcesBtn.addEventListener('click', function() {
                 setActiveTab(this);
